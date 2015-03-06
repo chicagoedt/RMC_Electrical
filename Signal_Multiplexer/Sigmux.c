@@ -290,9 +290,9 @@ is enabled then test code will be compiled otherwise it will be ignored.
 #define PORT					(2390)		//0x0956 //Port 2390
 #define HEX_PORT_1				(0x09)
 #define HEX_PORT_2				(0x56)
-#define Source_IP				"192.168.2.10"	//Set this to whatever the IP of the transmitter is.
-#define ROUTER_SSID				"Team_27"	//"Tomato24"
-#define SSID_LENGTH				(7)	
+#define Source_IP				"192.168.1.101"	//Set this to whatever the IP of the transmitter is.
+#define ROUTER_SSID				"RMC_Sigmux"	//"Tomato24"
+#define SSID_LENGTH				(10)	
 #define CC3000_APP_BUFFER_SIZE			(1)		//(5)
 #define CC3000_RX_BUFFER_OVERHEAD_SIZE		(20)
 #define DHCP_Complete				(PORTC & (1 << PC6))	
