@@ -104,7 +104,7 @@
  *			   variable due to its lack of utility. Changed DHCP_Complete to a boolean definition
  *			   rather than making it a global variable. Added an Unassigned_Mode definition to 
  *			   be used on initialization. Updated Pin Assignments. 
- *	4.2 (05/22/2014) - Moved the initial Safety_Mode configuration to after UART initialization. Also 
+ *	4.2 (05/22/2014) - Moved the initial SAFETY_MODE configuration to after UART initialization. Also 
  *			   a one second delay before it enters.	
  *	4.3 (06/27/2014) - Added a preprocessor flag for the TWI system called TWI_ENABLED. Added TWI related
  *			   macros. Added PinB4 as TWI Error LED.
@@ -139,6 +139,7 @@
  * PD1 (SDA/INT1) :			[UNUSED]	{TWI SDA Line}
  * PD2 (RXD1/INT2) :			[INPUT]  	{CC3000 IRQ}
  * PD3 (TXD1) : 			[OUTPUT] 	{RoboteQ RS232 Tx}
+ * PD4 (ICP1/ADC8) :		[OUTPUT]	{Multiplexer Select A}
  * PD5 (XCK1/!) : 			[OUTPUT] 	{Demux Select Line 0}
  * PD6 (T1/OC4D/ADC9) :			[UNUSED]	{Status 1 LED}
  * PD7 (T0/OC4D/ADC10) :		[UNUSED]	{Status 2 LED}
@@ -198,9 +199,9 @@
 /**
 	@breif SKIP_BOOT is a preprocessor flag that is used to skip the boot sequence to identify that the unit is 
 operating appropriately when turned on. Though it may consume time that can be better spent running the core code.
-	By default this flag is disabled. To enable the boot sequence, replace #undef with # define.
+	By default this flag is disabled. To enable the boot sequence, replace #define with #undef.
 */
-#define SKIP_BOOT
+#undef SKIP_BOOT
 
 /**
 	@breif ENERGY_ANALYSIS_ENABLED is a preprocessor flag that is ued to enable/disable power analysis of the
@@ -291,8 +292,8 @@ is enabled then test code will be compiled otherwise it will be ignored.
 #define HEX_PORT_1				(0x09)
 #define HEX_PORT_2				(0x56)
 #define Source_IP				"192.168.1.101"	//Set this to whatever the IP of the transmitter is.
-#define ROUTER_SSID				"RMC_Sigmux"	//"Tomato24"
-#define SSID_LENGTH				(10)	
+#define ROUTER_SSID				"Scipio_AP"	//"Tomato24"
+#define SSID_LENGTH				(9)	
 #define CC3000_APP_BUFFER_SIZE			(1)		//(5)
 #define CC3000_RX_BUFFER_OVERHEAD_SIZE		(20)
 #define DHCP_Complete				(PORTC & (1 << PC6))	
@@ -301,12 +302,15 @@ is enabled then test code will be compiled otherwise it will be ignored.
 #define Energy_Monitor_Address			(0x00)
 
 //Sigmux Mode Definitions:
-#define Unassigned_Mode				(4) //00000100			
-#define Safety_Mode               		(0) //00000000		//(1)		//00000001
-#define Autonomous_Mode           		(3) //00000011		//(2)		//00000010
-#define RC_Mode               	  		(1) //00000001		//(4)		//00000100
+#define U 			(4) //00000100			
+#define SAFETY_MODE               		(0) //00000000		//(1)		//00000001
+#define AUTONOMOUS_MODE           		(3) //00000011		//(2)		//00000010
+#define RC_MODE               	  		(1) //00000001		//(4)		//00000100
 #define Upload_Mode 		  		(2) //00000010		//(8)		//00001000
-	
+
+//Multiplexer Selection Definitions:
+#define ARM_FTDI_SELECT	(1)
+#define ATMEGA_TX		(0)
 //------------------------------------------------------------------------------------------------------------
 
 
@@ -432,6 +436,8 @@ uint8_t Set_Mode(uint8_t Mode);
 void Select_Motor_Controller(uint8_t Motor);
 //uint8_t Decrypt_Data(unsigned char Data);
 
+void Mux_Select(uint8_t selection); 
+
 #ifdef USB_ENABLED
 	inline void Enable_USB_Controller(void);
 	inline void Disable_USB_Controller(void);
@@ -503,7 +509,7 @@ int main (void)
 
 		#ifdef ROUTER_WATCHDOG_ENABLED
 			//Call the reset vector to restart the system from the beginning.
-                	if (Count >= 6)         {((void (*)(void))0)();}
+            if (Count >= 6)         {((void (*)(void))0)();}
 		/*	if (Count >= 6)		//{asm("JMP 0x0000");}
 			{
 				PORTC |= (1 << PORTC7);
@@ -516,10 +522,10 @@ int main (void)
 			//COULD IT BE BETTER TO NOT JUST SLEEP, BUT POWER DOWN THE CPU?
 			sleep_cpu(); /*Enter sleep mode.*/
 		#endif
-	}//End while loop
+	}
 
 	return 0;
-}//End main
+}
 
 
 //------------------------------------------------------------------------------------------------------
@@ -532,9 +538,13 @@ int main (void)
 
 /**
 	@brief	Initialization is used to configure all of the registers of the microcontroller
-
-		The purpose of this function is to improve readability. By making it an inline function the code is efficient as possible and 
-	@author John Sabino
+			Steps:
+				1) Initialize CC3000
+				2) Set MUX Select_A to LOW, so we can send the Kill command from Atmega TX line 
+					(C0 input on MUX)
+				3) Set Mode to Safety Mode
+				4) Set MUX Select A to HIGH, so we get into Autonomous mode by default
+					(C1 input on MUX) 
 */
 inline void Initialization (void)
 {
@@ -542,38 +552,47 @@ inline void Initialization (void)
 		wdt_enable(WDTO_8S);
 	 #endif	
 
-
 	//Turn on the Power LED to identify that the device is on.
 	//DDRE |= (1 << DDE2);		//POWER LED
 	DDRC |= (1 << DDC7);		//STATUS LED
 	//PORTE |= (1 << PORTE2);		//TURN ON POWER LED
 
-        //Set up the LEDs for WLAN_ON and DHCP:
-        DDRB |= (1 << DDB6);    //WLAN_INIT LED
-        DDRC |= (1 << DDC6);    //DHCP_Complete LED
+    //Set up the LEDs for WLAN_ON and DHCP:
+    DDRB |= (1 << DDB6);    //WLAN_INIT LED
+    DDRC |= (1 << DDC6);    //DHCP_Complete LED. This will turn on and very slowly blink
 
+    DDRD |= (1 << DDD4); 	// MUX Select line, setting as output.
 
-#ifndef SKIP_BOOT
-	DDRB |= (1 << DDB4);
-	DDRD |= (1 << DDD7);
-	DDRD |= (1 << DDD6);
+    DDRF |= (1 << DDF0);	// DDRF set outbound for Safe Mode LED
+    DDRF |= (1 << DDF1);	// DDRF set outbound for RC Mode LED
+    DDRF |= (1 << DDF6);	// DDRF set outbound for Autonomous Mode LED
 
-	PORTB |= (1 << PB4);
-	_delay_ms(1000);
-	PORTD |= (1 << PD7);
-	_delay_ms(1000);
-	PORTD |= (1 << PD6);
-	_delay_ms(1000);
-	PORTB &= ~(1 << PB4);
-	_delay_ms(1000);
-	PORTD &= ~(1 << PD7);
-	_delay_ms(1000);
-	PORTD &= ~(1 << PD6);
-#endif
+    PORTF |= (1 << PF0);
+    PORTF |= (1 << PF1);
+    PORTF |= (1 << PF6);
 
-		
-	//First thing, set the Sigmux to Safe Mode.
-	//Set_Mode(Safety_Mode);
+	#ifndef SKIP_BOOT
+		DDRB |= (1 << DDB4);
+		DDRD |= (1 << DDD7);
+		DDRD |= (1 << DDD6);
+
+		PORTB |= (1 << PB4);
+		_delay_ms(200);
+		PORTD |= (1 << PD7);
+		_delay_ms(200);
+		PORTD |= (1 << PD6);
+		_delay_ms(200);
+		PORTB &= ~(1 << PB4);
+		_delay_ms(200);
+		PORTD &= ~(1 << PD7);
+		_delay_ms(200);
+		PORTD &= ~(1 << PD6);
+	#endif
+
+	_delay_ms(500);
+	PORTF &= ~(1 << PF0);
+    PORTF &= ~(1 << PF1);
+    PORTF &= ~(1 << PF6);
 
 	#ifdef ENERGY_ANALYSIS_ENABLED
 		//Enable Timer/Counter0 Interrupt on compare match of OCR0A:
@@ -587,13 +606,7 @@ inline void Initialization (void)
 		
 		//Enable the Analog to Digital Conversion (ADC):
 		ADCSRA = (1 << ADEN);		//25 Clock cycles to initialize.	
-
-
-	#endif	//ENERGY_ANALYSIS_ENABLED
-
-
-
-
+	#endif	
 
 	#ifdef CC3000_ENABLED
 
@@ -611,58 +624,29 @@ inline void Initialization (void)
 			  Write_WLAN_Pin);
  
 		PORTB |= (1 << PB6);	//Set the WLAN_INIT LED on.
-
-		//Set the connection policy:
-//wlan_ioctl_set_connection_policy(0, 1, 1);      //Only auto-connect to profiles specified in the user profile.
-
-///DEBUG LINE:
-//PORTB |= (1 << PB4);
-
-///DEBUG LINE:
-//PORTB |= (1 << PB4);
-
 		sei();
-	
-//PORTB |= (1 << PB4);
 
 		//Enable the CC3000, and wait for initialization process to finish.
 		wlan_start(0);
-//PORTB &= ~(1 << PB4);
+
 		wlan_set_event_mask(HCI_EVNT_WLAN_KEEPALIVE|HCI_EVNT_WLAN_UNSOL_INIT|HCI_EVNT_WLAN_ASYNC_PING_REPORT);
 
-///DEBUG LINE:
-//PORTD |= (1 << PD7);
-//PORTD |= (1 << PD6);
-
-/* //In case we need to have a char array.
-		char * SSID 			= "Tomato24";
-		unsigned long SSID_Length 	= 8;
-*/
-		//if (wlan_connect(WLAN_SEC_WPA, "chicagoedt", 10, "chicagoedt", "notrightnow", 11) == 0)
-		//if (wlan_connect(WLAN_SEC_UNSEC, "chicagoedt", 10, "chicagoedt", NULL, 0) == 0)	
 		//Make sure we disconnect from any previous routers before we connect to a new one to prevent confusion on the device.
 		wlan_disconnect();
-//PORTD |= (1 << PD6);
+
 		wlan_connect(WLAN_SEC_UNSEC, ROUTER_SSID, SSID_LENGTH, NULL, NULL, 0);
-//PORTD &= ~(1 << PD7);	
-		while(!DHCP_Complete)					{_delay_ms(1000);}//PORTB ^= (1 << PB4);
+
+		while(!DHCP_Complete)
+		{
+			_delay_ms(1000);
+		}
 		
-	        #ifdef WATCHDOG_ENABLED
+	    #ifdef WATCHDOG_ENABLED
 			wdt_reset();
 		#endif
-/*
-		//This is the socket address required to send and receive data.
-		sockaddr_in Mission_Control_Address;
-		//Clear it out to prevent any issues if I forget anything.
-		memset((char *) &Mission_Control_Address, 0, sizeof(Mission_Control_Address));
-		Mission_Control_Address.sin_family = AF_INET;
-		Mission_Control_Address.sin_port   = htons(PORT);
-		//This requires the use of arpa/inet.h library, so to minimize design we are not doing this.
-		inet_aton(Source_IP, &Mission_Control_Address.sin_addr);
-*/
 
 		//Bind a socket to receive data:
-//sockaddr Mission_Control_Address;
+		//sockaddr Mission_Control_Address;
 		memset((char *) &Mission_Control_Address, 0, sizeof(Mission_Control_Address));
 		Mission_Control_Address.sa_family = AF_INET;
 		
@@ -673,25 +657,19 @@ inline void Initialization (void)
 		//Configure the socket to not time out to keep the connection active.
 		//--------------------------------------------------------------------
    		unsigned long aucDHCP       = 14400;
-        	unsigned long aucARP        = 3600;
-        	unsigned long aucKeepalive  = 10;
-        	unsigned long aucInactivity = 0;
+        unsigned long aucARP        = 3600;
+        unsigned long aucKeepalive  = 10;
+        unsigned long aucInactivity = 0;
 
 		netapp_timeout_values(&aucDHCP, &aucARP, &aucKeepalive, &aucInactivity);
-                //--------------------------------------------------------------------
 
-		//Only necessary if CC3000 is set to a static IP.
-		//netapp_dhcp(NULL, NULL, NULL, NULL);		//Sets the CC3000 to automatic DHCP
-
-///////////////////
-
-	//TODO:
-	//Should check the CC3000's profiles. In the case that there are no profiles found, then 
-	//inform the PC system, or use an LED.
+		//TODO:
+		//Should check the CC3000's profiles. In the case that there are no profiles found, then 
+		//inform the PC system, or use an LED.
 
 		//Open a UDP socket that grabs datagram:
 		Socket_Handle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	
+
 		switch(Socket_Handle)
 		{
 			case -1:		//Error
@@ -700,90 +678,52 @@ inline void Initialization (void)
 
 			default:		//Success
 				//Set the socket configuration for blocking (since it is the only thing that is allowed).
-				switch(bind(Socket_Handle, &Mission_Control_Address, sizeof(sockaddr)))
-                		{
-                        		case -1:
-                                		//Flag as ERROR.
-                        		break;
+				switch( bind(Socket_Handle, &Mission_Control_Address, sizeof(sockaddr)))
+	    		{
+	        		case -1:
+	            		//Flag as ERROR.
+	        			break;
 
-                        		default:
-                                		//Flag as good.
-                        		break;
-                		}//End switch
+	        		default:
+	            		//Flag as good.
+	        			break;
+	    		}
 
 			break;
+		}
+	#endif
 
-		}//End switch
-	
-		//Clear out the buffer:
-		//memset((char *) &Data_Buffer, 0, sizeof(Data_Buffer));
-
-//SEND DATA (DEBUG TEST):
-
-/*
-		char MESSAGE [] = "HELLO";
-		sockaddr Socket_Address;
-		
-		//Set the family to AF_INET:
-		Socket_Address.sa_family = 2;
-		
-		//The destination port:
-		Socket_Address.sa_data[0] = (char)0x09;
-		Socket_Address.sa_data[1] = (char)0x56;
-		
-		//The destination IP:
-		Socket_Address.sa_data[2] = (char)0xC0;
-		Socket_Address.sa_data[3] = (char)0xA8;
-		Socket_Address.sa_data[4] = (char)0x02;
-		Socket_Address.sa_data[5] = (char)0x31;
-		memset(&Socket_Address.sa_data[6], 0, 7);
-
-		
-		while(sendto(Socket_Handle, MESSAGE, 5, 0, &Socket_Address, sizeof(sockaddr)) != -1);
-	
-		PORTD |= (1 << PD7);
-
-*/
-
-	#endif  //CC3000_ENABLED
-
-
-	#ifdef PWM_ENABLED
-
-		//Put code to initialize the PWM on OC4A[PC7], OC3A[PC6], and OC1B[PB5].
-
-	#endif //PWM_ENABLED
-
-//NEED TO SETUP A QUICK REMOVAL FLAG FOR THIS CODE TO TEST THE CC3000.
-//#ifdef MOTOR_CONTROL_FLAG
-	//Set up our Motor Controller Selection lines and the output for the RS232 lines:
-	//DDRD |= (1 << DDD3) | (1 << DDD4) | (1 << DDD5);
+	// NEED TO SETUP A QUICK REMOVAL FLAG FOR THIS CODE TO TEST THE CC3000.
+	// #ifdef MOTOR_CONTROL_FLAG
+	// Set up our Motor Controller Selection lines and the output for the RS232 lines:
+	// DDRD |= (1 << DDD3) | (1 << DDD4) | (1 << DDD5);
 	DDRD |= (1 << DDD3) | (1 << DDD5);
 
-	//Initialize the UART (RS-232 communications) for the motor controller interface:
+	// Initialize the UART (RS-232 communications) for the motor controller interface:
 	
-	//Set the Baud rate to 115200 bits/s.  ((System Oscillator clock frequency / (2 * BAUD) ) - 1)
-//NOTE: The value may not be correct, according to the data sheet (pg. 213).
-	//With the value 16, the error is 2.1% (lower than 8, being -3.5%).
+	// Set the Baud rate to 115200 bits/s.  ((System Oscillator clock frequency / (2 * BAUD) ) - 1)
+	// NOTE: The value may not be correct, according to the data sheet (pg. 213).
+	// With the value 16, the error is 2.1% (lower than 8, being -3.5%).
+	// This comes from util/setbaud.h
 
 	UBRR1H = UBRRH_VALUE; /*Set baud rate*/
 	UBRR1L = UBRRL_VALUE; /*Set baud rate*/
 
-//Defined in util/setbaud.h:
+	//Defined in util/setbaud.h:
 	#if USE_2X
 		UCSR1A |= (1 << U2X1);	//Double the baud rate for asynchronous communication.
 	#else
 		UCSR1A &= ~(1 << U2X1);
-	#endif	//End USE_2X    
+	#endif	    
 
-	//Set to no parity and in Asynchronous mode.
-        //1 Stop bit.
-        //1 Start bit.
-        //Set to 8-bit data.
-        UCSR1C |= (1 << UCSZ11) | (1 << UCSZ10); 
+	// Set to no parity and in Asynchronous mode.
+    // 1 Stop bit.
+    // 1 Start bit.
+    // Set to 8-bit data.
+    UCSR1C |= (1 << UCSZ11) | (1 << UCSZ10); 
 
-        //Enable the Rx and Tx lines.
-        UCSR1B |= (1 << TXEN1);
+    //Enable the Rx and Tx lines.
+    UCSR1B |= (1 << TXEN1);
 
 
 
@@ -793,85 +733,9 @@ inline void Initialization (void)
 	DDRB |= (1 << DDB4);	//Setup PortB4 as the TWI error LED.
 #endif	//End TWI_ENABLED
 
-/*
-//DEBUG:
-char SEND = 0x31;
-char REC = 0;
-while(1)
-{
-*/
-//while (!( UCSR1A & (1<<UDRE1))); 
-//UDR1 = SEND;
-//_delay_ms(500);
-/*
-//unsigned char SEND = '1';
-//loop_until_bit_is_set(UCSR1A, RXC1); // Wait until data register empty.
-//	unsigned char REC = UDR1; 
-loop_until_bit_is_set(UCSR1A, UDRE1);
-	UDR1 = 0x7d;
-loop_until_bit_is_set(UCSR1A, UDRE1); // Wait until data register empty.
-//loop_until_bit_is_set(UCSR1A, TXC1); // Wait until transmission ready.
-        UDR1 = 0x7b;
-loop_until_bit_is_set(UCSR1A, UDRE1); // Wait until data register empty.
-//loop_until_bit_is_set(UCSR1A, TXC1); // Wait until transmission ready.
-        UDR1 = 0x79;
-loop_until_bit_is_set(UCSR1A, UDRE1); // Wait until data register empty.
-//loop_until_bit_is_set(UCSR1A, TXC1); // Wait until transmission ready.
-        UDR1 = 0xbd;
-*/
-/*
-unsigned char SEND [] = "Hello";
-
-USART_Transmit(SEND, sizeof(SEND));
-
-//Serial has completed initialization.
-PORTD |= (1 << PD7);
-*/
-
-	//Setup the Timer Compare Match to loop every 10ms:
-	/*
-	TCCR1B = (1 << WGM12) | (1 << CS12);	//Set to CTC mode and Prescale by 256.
-
-	OCR1B = 625;		//Set the top value to compare against. Used the equation 1 sec = 16000000Hz.
-	*/
-	//PRESCALER:
-		//TODO: If I feel that it should be lower.
-//#endif
- 	
-///THIS SHOULD BE THE LAST LINE OF CODE IN THE INITIALIZATION.
-/*
-	#ifdef WATCHDOG_ENABLED      
-          
-	      //Enable the watchdog timer.
-               //wdt_enable(WDTO_2S);    //Enable the watchdog timer with a 2 second Time Out.
-		
-		//cli();	//Temporarily disable global interrupts.
-		
-		Feed_Watchdog();//Reset the watchdog timer.
-
-		//Enable the watchdog timer, set it to reset mode, and set the timer for eight seconds:
-		WDTCSR = (1 << WDE) | (1 << WDP3) | (1 << WDP0);
-
-	//	sei(); //Re-enable global interrupts.
-		wdt_enable(WDTO_8S);
-	#endif  //WATCHDOG_ENABLED
-	*/
-
-	//sei();	//Enable Global Interrupts.	
-
-
-//QUICKLY REQUEST WHAT PATCH VERSION IS ON THE CC3000 AND FORWARD IT TO USART:
-/*
-unsigned char * OUT = NULL;
-nvmem_read_sp_version(OUT);
-USART_Transmit(OUT, sizeof(OUT));
-*/
-
-	_delay_ms(1000);	//Wait for one second for the RoboteQs to finish booting.
-	//First thing, set the Sigmux to Safe Mode.
-	Set_Mode(Safety_Mode);
-
-
+	_delay_ms(1000);			//Wait for one second for the RoboteQs to finish booting.	
+	Set_Mode(SAFETY_MODE); 		// Set to Safe Mode to send Kill Command to Roboteq's
+	Set_Mode(AUTONOMOUS_MODE);
 
 
 	#ifdef ROUTER_WATCHDOG_ENABLED
@@ -893,6 +757,19 @@ USART_Transmit(OUT, sizeof(OUT));
 //==========================================================================================================
 //==========================================================================================================
 
+void Mux_Select(uint8_t selection)
+{
+	switch (selection)
+	{
+		case ATMEGA_TX:
+			PORTD &= ~(1 << PD4); // Set MUX Select A low to allow Atmega TX line to go through MUX
+			break;
+		case ARM_FTDI_SELECT:
+			PORTD |= (1 << PD4); // Set MUX Select A high to allow FTDI to go through MUX
+			break;
+	}
+}
+
 /*Set_Mode*/
 /**
   * @breif 
@@ -900,100 +777,69 @@ USART_Transmit(OUT, sizeof(OUT));
 uint8_t Set_Mode(uint8_t New_Mode)
 {
 
-	if (New_Mode == Current_Mode)	{return Current_Mode;}
-
 	unsigned char Kill_Command[] = {'!', 'E', 'X', '\r'};//"!EX\r";
 	unsigned char Go_Command[] = {'!', 'M', 'G', '\r'};//"!MG\r";
 
-	switch (New_Mode)
+	if (New_Mode != Current_Mode)
 	{
-		case Safety_Mode:
-			//Disable USB communications (i.e. disable autonomous):
-			#ifdef USB_ENABLED
-				Disable_USB_Controller();
-			#endif
-			//Send neutral signal to motor controllers (or if we could disable them...).
-			switch(Current_Mode)
-			{
-				case Safety_Mode:
-					return Safety_Mode;
-				break;
-				default:
-					//unsigned char Kill_Command[] = "!EX\r";
+		switch (New_Mode)
+		{
+			case SAFETY_MODE:
+
+				Mux_Select(ATMEGA_TX);	
+
+				Select_Motor_Controller(1);
+				USART_Transmit(Kill_Command, 4);
 			
-					Select_Motor_Controller(1);
-					USART_Transmit(Kill_Command, 4);
-			
-					Select_Motor_Controller(2);
-                        		USART_Transmit(Kill_Command, 4);
+				Select_Motor_Controller(2);
+                USART_Transmit(Kill_Command, 4);
 					
-					//Stop the Linear Actuator 01/11
-                                        //PORTD &= ~(1 << PD7);
-                                        //PORTD &= ~(1 << PD6);
+				// Stop the Linear Actuator 01/11
+                // PORTD &= ~(1 << PD7);
+                // PORTD &= ~(1 << PD6);
 
-					//Signal that the unit is in safety mode.
-					PORTC &= ~(1 << PORTC7);
+				//Signal that the unit is in safety mode.
+				PORTC &= ~(1 << PORTC7);
+				Current_Mode = SAFETY_MODE;
 				break;
-			}//End switch
-		break;
 
-		case Autonomous_Mode:            
-//		case Upload_Mode:
-			//Enable USB communications:
-			#ifdef USB_ENABLED
-				Enable_USB_Controller();
-			#endif
-			//Listen to all communications by the computer.
-			//Do not forward any CC3000 motor controller commands.
-		break;
+			case AUTONOMOUS_MODE:            
+				//Listen to all communications by the computer.
+				//Do not forward any CC3000 motor controller commands.
 
-		case RC_Mode:           
-			
-			//Disable USB communications:
-			#ifdef USB_ENABLED
-				Disable_USB_Controller();
-			#endif
-			//Forward all CC3000 motor controller commands.    
-
-			switch(Current_Mode)
-			{
-				case RC_Mode:
-					return RC_Mode;
+				Mux_Select(ARM_FTDI_SELECT);
+				Current_Mode = AUTONOMOUS_MODE;
 				break;
-				default:
-					//unsigned char Go_Command[] = "!MG\r";
-                        
-                        		Select_Motor_Controller(1);
-                        		USART_Transmit(Go_Command, 4);
 
-                        		Select_Motor_Controller(2);
-                        		USART_Transmit(Go_Command, 4);				
-					
-					PORTC |= (1 << PORTC7);
+			case RC_MODE:
+				//unsigned char Go_Command[] = "!MG\r";
+                    
+				Mux_Select(ATMEGA_TX);
+
+	    		Select_Motor_Controller(1);
+	    		USART_Transmit(Go_Command, 4);
+
+	    		Select_Motor_Controller(2);
+	    		USART_Transmit(Go_Command, 4);				
+				
+				PORTC |= (1 << PORTC7); // Krystian Note- Should check what this does
+				Current_Mode = RC_MODE;
 				break;
-			}//End switch
-		break;
 
-/*
-		case Upload_Mode:
-			//Enable USB communications to the computer:
-			#ifdef USB_ENABLED
-				Enable_USB_Controller();
-			#endif
-			//Do not listen for any of the motor controller commands, only CC3000 uploads.
-			//Send neutral signal to motor controllers (or if we could disable them...).
-		break;
-*/
-		default:
-			//Invalid input: 
-			return -1;
-		break;
-	}//End switch
+			default:
+				return -1;
+				break;
+		}
+
+		return Current_Mode; // After setting the mode, this should now be the current mode we return
+	}
+	else
+	{
+		return Current_Mode; // The current mode is not different from the new requested mode
+	}
 	
-	Current_Mode = New_Mode;
-	
-	return New_Mode;	
-}//End Switch_Mode
+}
+
 //==========================================================================================================
 //==========================================================================================================
 
@@ -1020,27 +866,19 @@ char* Send_Driver_Patch(unsigned long *usLength)
 {
 	*usLength = 0;
 	return NULL;
-}//End Send_Driver_Patch
-
-//--------------------------------------------------------
+}
 
 char* Send_Boot_Loader_Patch(unsigned long *usLength)
 {
 	*usLength = 0;
 	return NULL;
-}//End Send_Boot_Loader_Patch
-
-//--------------------------------------------------------
-
+}
 
 char* Send_WLFW_Patch(unsigned long *usLength)
 {
 	*usLength = 0;
 	return NULL;
-}//End Send_WLFW_Patch
-
-//--------------------------------------------------------
-
+}
 
 void CC3000_Unsynch_Call_Back(long Event_Type, char * Data, unsigned char Length)
 {
@@ -1048,41 +886,40 @@ void CC3000_Unsynch_Call_Back(long Event_Type, char * Data, unsigned char Length
 	{
 		case HCI_EVNT_WLAN_ASYNC_SIMPLE_CONFIG_DONE:	//First-time configuration process is complete.
 			break;
-		case HCI_EVNT_WLAN_KEEPALIVE:			//Periodic keep-alive event.
+		case HCI_EVNT_WLAN_KEEPALIVE:					//Periodic keep-alive event.
 			break;
-		case HCI_EVNT_WLAN_UNSOL_CONNECT:		//WLAN-connected event.
+		case HCI_EVNT_WLAN_UNSOL_CONNECT:				//WLAN-connected event.
 			break;
-		case HCI_EVNT_WLAN_UNSOL_DISCONNECT:		//CC3000 disconnected from AP.
+		case HCI_EVNT_WLAN_UNSOL_DISCONNECT:			//CC3000 disconnected from AP.
 			break;
-////COMPILER CANNOT FIND THESE.
-		case HCI_EVNT_WLAN_UNSOL_DHCP:			//DHCP state change.
-				if ( * (Data + NETAPP_IPCONFIG_MAC_OFFSET) == 0)
-				{
-					//DHCP_Complete = 1;
-					PORTC |= (1 << PC6);
-				}//End if
-				else
-				{
-					//DHCP_Complete = 0;
-					PORTC &= ~(1 << PC6);
-				}//End else			
+		////COMPILER CANNOT FIND THESE.
+		case HCI_EVNT_WLAN_UNSOL_DHCP:					//DHCP state change.
 
+			if ( * (Data + NETAPP_IPCONFIG_MAC_OFFSET) == 0)
+			{
+				//DHCP_Complete = 1;
+				PORTC |= (1 << PC6);
+			}
+			else
+			{
+				//DHCP_Complete = 0;
+				PORTC &= ~(1 << PC6);
+			}		
 			break;
-//case HCI_EVENT_CC300_CAN_SHUT_DOWN:
-//break;	
+
+		//case HCI_EVENT_CC300_CAN_SHUT_DOWN:
+			//break;	
 		case HCI_EVNT_WLAN_ASYNC_PING_REPORT:		//Notification of ping results.
 			break;
-//case HCI_EVNT_BSD_TCP_CLOSE_WAIT:	
-//break;	
-		case HCI_EVNT_WLAN_UNSOL_INIT:			//CC3000 finished the initialization process.
-
+		//case HCI_EVNT_BSD_TCP_CLOSE_WAIT:	
+			//break;	
+		case HCI_EVNT_WLAN_UNSOL_INIT:				//CC3000 finished the initialization process.
 			break;	
+
 		default:
 			break;
-	}//End switch
-}//End CC3000_Unsynch_Call_Back
-
-//--------------------------------------------------------
+	}
+}
 
 /*Read_Interrupt_Pin*/
 /**
@@ -1091,9 +928,7 @@ void CC3000_Unsynch_Call_Back(long Event_Type, char * Data, unsigned char Length
 long Read_WLAN_Interrupt_Pin()
 {
 	return bit_is_set(PIND, PIND2);
-}//End Read_Interrupt_Pin 
-
-//--------------------------------------------------------
+}
 
 void Write_WLAN_Pin(unsigned char val)
 {
@@ -1105,10 +940,8 @@ void Write_WLAN_Pin(unsigned char val)
 		case 1:
 			PORTB |= (1 << PORTB5);
 			break;
-	}//End switch
-}//End Write_WLAN_Pin
-
-//--------------------------------------------------------
+	}
+}
 
 void WLAN_Interrupt_Enable()
 {
@@ -1116,23 +949,17 @@ void WLAN_Interrupt_Enable()
 	EICRA = (1 << ISC21);
 	EIMSK |= (1 << INT2);
 
-}//End WLAN_Interrupt_Enable
-
-//--------------------------------------------------------
+}
 
 void WLAN_Interrupt_Disable()
 {
 	EIMSK &= ~(1 << INT2);
-}//End WLAN_Interrupt_Disable
-
-
-//--------------------------------------------------------
+}
 
 uint8_t Recieve_WiFi_Data()
-//inline void Recieve_WiFi_Data()
 {
 	unsigned char Temp_Buffer[1];
-        unsigned long Rx_Packet_Length = 0;
+    unsigned long Rx_Packet_Length = 0;
 	//uint8_t Index = 0;
 	//uint8_t End_Found = 0;
 	
@@ -1143,16 +970,15 @@ uint8_t Recieve_WiFi_Data()
 		break;
 
 		case 0:
-//			return -1;
+			// return -1;
 		break;
-	}//End switch
-
-        //memset((unsigned char *) &Temp_Buffer, 0, sizeof(Temp_Buffer));		
+	}
+		
 	Temp_Buffer[0] = 0;
 
-        //Begin receiving data:
-        recvfrom(Socket_Handle, Temp_Buffer, CC3000_APP_BUFFER_SIZE, 0, &Mission_Control_Address, &Rx_Packet_Length);	
-	//Since it matches the protocol, we need to keep scanning to find the deliminating character.
+    // Begin receiving data:
+    recvfrom(Socket_Handle, Temp_Buffer, CC3000_APP_BUFFER_SIZE, 0, &Mission_Control_Address, &Rx_Packet_Length);	
+	// Since it matches the protocol, we need to keep scanning to find the deliminating character.
 /*
 	while(!End_Found)
 	{
@@ -1173,25 +999,26 @@ uint8_t Recieve_WiFi_Data()
 	}//End while loop	
 */
 	//Decipher the data transmitted to see if it matches the protocol (if it doesn't ERROR):
-	if(Temp_Buffer[0]) {Decrypt_Data(Temp_Buffer[0]);}
+	if(Temp_Buffer[0]) 
+		Decrypt_Data(Temp_Buffer[0]); 
 /*        
 	switch(Data_Buffer[0])
         {
                 case 48:                                //'0'
-                        Set_Mode(Safety_Mode);
+                        Set_Mode(SAFETY_MODE);
                 break;
                 case 49:                                //'1'
-                        Set_Mode(RC_Mode);
+                        Set_Mode(RC_MODE);
                         Select_Motor_Controller(1);
                         USART_Transmit(Data_Buffer, Index);
 	        break;
                 case 50:                                //'2'
-                        Set_Mode(RC_Mode);
+                        Set_Mode(RC_MODE);
                         Select_Motor_Controller(2);
                         USART_Transmit(Data_Buffer, Index);
                 break;
                 case 51:                                //'3'
-                        Set_Mode(Autonomous_Mode);
+                        Set_Mode(AUTONOMOUS_MODE);
                 break;
                 default:
                         return -1;
@@ -1220,379 +1047,11 @@ void Select_Motor_Controller(uint8_t Motor)
 			return;
 		break;
 
-	}//End switch
+	}
 
 
 	_delay_ms(10);
-	//asm("nop");
-	//asm("nop");
-
-	//Current_Motor = Motor;
-
-}//End Select_Motor_Controller
-
-
-/*
-uint8_t Decrypt_Data(unsigned char Data)
-{
-	if (Data == 0)	{return;}
-	//|E|O|M|M|D|P|P|P|
-	unsigned char Parsed_Data = 0;
-	uint8_t index = 0;
-
-	Parsed_Data = Data >> 7;
-
-	if (Parsed_Data)
-	{
-		//Expansion bit is true.
-		return 0;	
-	}//End if
-
-	Parsed_Data = Data >> 6;
-	
-	if (!Parsed_Data)
-	{
-		//Operation bit is false, so set to eStop. 
-		Set_Mode(Safety_Mode);	
-		return 1;
-	}//End if
-	
-	Set_Mode(RC_Mode);
-
-	unsigned char Output_Command[20];
-        memset((unsigned char *) &Output_Command, 0, sizeof(Output_Command));
-
-	Parsed_Data = Data << 2;
-	Parsed_Data >>= 6;
-
-	Select_Motor_Controller(Parsed_Data);
-
-	switch(Parsed_Data)
-	{
-		case 0:		//00		Left Wheel
-		case 2:		//10		Mechanism
-			strcpy(Output_Command, "!M ");
-			index = 3;
-		break;
-
-		case 1:		//01		Right Wheel
-                        strcpy(Output_Command, " ");
-			index = 1;
-		break;
-
-                case 3:		//11		Linear Actuator
-			//Continue code to set output pins to RoboteQ to control the Linear Actuator.
-			switch((Data & 0x0c) >> 2)
-			{
-				case 0:		//Positive direction of motion (up). 00
-					PORTD &= ~(1 << PD6);
-					PORTD |= (1 << PD7);
-				break;
-				
-				case 2:		//Negative direction of motion (down). 10
-					PORTD |= (1 << PD6);
-					PORTD |= (1 << PD7);
-				break;
-	
-				default:	//Stop the Linear Actuator 01/11
-					PORTD &= ~(1 << PD6);
-					PORTD &= ~(1 << PD7);	
-				break;
-			}//End switch	
-
-			return 0;
-		break;
-
-		default:
-			//Something has gone terribly wrong!!!
-			return -1;
-		break;
-
-	}//End switch
-
-	Parsed_Data = Data << 4;
-	Parsed_Data >>= 4;	
-
-	switch (Parsed_Data)
-	{	
-                case 0:			//0000	0		0		0%	
-                case 8:                 //1000  8               -8              0%		
-			strcpy(&Output_Command[index],"0\r");
-		break;
-		
-		case 1:			//0001  1		1		14.3%
-			strcpy(&Output_Command[index],"143\r");
-		break;
-                
-		case 2:			//0010  2		2		28.6%
-                        strcpy(&Output_Command[index],"286\r");
-		break;
-                
-		case 3:			//0011	3		3		42.9%
-                        strcpy(&Output_Command[index],"429\r");                
-		break;			
-                
-		case 4:			//0100	4		4		57.2%		
-                        strcpy(&Output_Command[index],"572\r");                
-		break;
-                
-		case 5:			//0101	5		5		71.5%
-                        strcpy(&Output_Command[index],"715\r");                	
-		break;
-                
-		case 6:			//0110	6		6		85.8%
-                        strcpy(&Output_Command[index],"858\r");                
-		break;
-                
-		case 7:			//0111	7		7		100%
-                        strcpy(&Output_Command[index],"1000\r");                
-		break;
-              
-		case 9:			//1001	9		-7		-14.3%
-                        strcpy(&Output_Command[index],"-143\r");                
-		break;
-                
-		case 10:		//1010	10		-6		-28.6%
-                        strcpy(&Output_Command[index],"-286\r");                
-		break;
-                
-		case 11:		//1011	11		-5		-42.9%
-                        strcpy(&Output_Command[index],"-429\r");     
-	        break;
-                
-		case 12:		//1100	12		-4		-57.2%
-                        strcpy(&Output_Command[index],"-572\r");                
-		break;
-                
-		case 13:		//1101	13		-3		-71.5%
-                        strcpy(&Output_Command[index],"-715\r");                
-		break;
-                
-		case 14:		//1110	14		-2		-85.8%
-                        strcpy(&Output_Command[index],"-858\r");                
-		break;
-                
-		case 15:		//1111	15		-1		-100%
-                        strcpy(&Output_Command[index],"-1000\r");                
-		break;
-		
-		default:
-			//Something has gone terribly wrong!!!
-			return -1;
-		break;
-	}//End switch	
-
-	Parsed_Data = Data << 2;
-        Parsed_Data >>= 6;
-
-        switch(Parsed_Data)
-        {
-		case 1:		//01		Right Wheel
-                case 2:         //10            Mechanism
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command + 1));
-		break;
-
-		default:
-			 USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command));
-		break;
-	}//End switch statement
-
-
-	//USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command + 1)); 
-
-	return 0;
-}//End Decrypt_Data
-*/
-
-/*
-uint8_t Decrypt_Data(unsigned char Data)
-{
-	int Wheel_Speed = 0;
-	unsigned char Output_Command[10];
-
-	switch(Data)
-	{
-
-		//Left Wheel Forward:
-		case 71:
-			Wheel_Speed = 142;
-		case 70:
-			Wheel_Speed += 143;
-		case 69:
-			Wheel_Speed += 143;
-		case 68:
-			Wheel_Speed += 143;
-		case 67:
-			Wheel_Speed += 143;
-		case 66:
-			Wheel_Speed += 143;
-		case 65:
-			Wheel_Speed += 143;
-		case 64:
-			Set_Mode(RC_Mode);
-			Select_Motor_Controller(1);		
-			sprintf(Output_Command, "!M %d\r", Wheel_Speed);
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command));		
-		break;
-
-		//Left Wheel Reverse:
-		case 79:
-			Wheel_Speed = -142;
-		case 78:
-			Wheel_Speed -= 143;
-		case 77:
-			Wheel_Speed -= 143;
-		case 76:
-			Wheel_Speed -= 143;
-		case 75:
-			Wheel_Speed -= 143;
-		case 74:
-			Wheel_Speed -= 143;
-		case 73:
-			Wheel_Speed -= 143;
-		case 72:
-			Set_Mode(RC_Mode);
-                        Select_Motor_Controller(1);
-			sprintf(Output_Command, "!M %d\r", Wheel_Speed);
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command));			
-		break;	
-	
-		//Right Wheel Forward:
-		case 87:
-			Wheel_Speed = 142;
-		case 86:
-			Wheel_Speed += 143;
-		case 85:
-			Wheel_Speed += 143;
-		case 84:
-			Wheel_Speed += 143;
-		case 83:
-			Wheel_Speed += 143;
-		case 82:
-			Wheel_Speed += 143;
-		case 81:
-			Wheel_Speed += 143;
-		case 80:
-			Set_Mode(RC_Mode);
-			Select_Motor_Controller(1);
-			sprintf(Output_Command, " %d\r", Wheel_Speed);
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command + 1));		
-		break;
-	
-		//Right Wheel Reverse:
-		case 95:
-			Wheel_Speed = -142;
-		case 94:
-			Wheel_Speed -= 143;
-		case 93:
-			Wheel_Speed -= 143;
-		case 92:
-			Wheel_Speed -= 143;
-		case 91:
-			Wheel_Speed -= 143;
-		case 90:
-			Wheel_Speed -= 143;
-		case 89:
-			Wheel_Speed -= 143;
-		case 88:
-			Set_Mode(RC_Mode);
-			Select_Motor_Controller(1);
-			sprintf(Output_Command, " %d\r", Wheel_Speed);
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command + 1));	
-		break;
-	
-		//Digging Mechanism Forward:
-		case 111:
-			Wheel_Speed = 142;
-		case 110:
-			Wheel_Speed += 143;
-		case 109:
-			Wheel_Speed += 143;
-		case 108:
-			Wheel_Speed += 143;
-		case 107:
-			Wheel_Speed += 143;
-		case 106:
-			Wheel_Speed += 143;
-		case 105:
-			Wheel_Speed += 143;
-		case 104:
-			Set_Mode(RC_Mode);
-			Select_Motor_Controller(2);
-			sprintf(Output_Command, "!M %d\r", Wheel_Speed);
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command));	
-		break;
-
-		//Digging Mechanism Reverse:
-		case 103:
-			Wheel_Speed = -142;
-		case 102:
-			Wheel_Speed -= 143;
-		case 101:
-			Wheel_Speed -= 143;
-		case 100:
-			Wheel_Speed -= 143;
-		case 99:
-			Wheel_Speed -= 143;
-		case 98:
-			Wheel_Speed -= 143;
-		case 97:
-			Wheel_Speed -= 143;
-		case 96:
-			Set_Mode(RC_Mode);
-			Select_Motor_Controller(2);
-			sprintf(Output_Command, "!M %d\r", Wheel_Speed);
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command));
-		break;
-
-		//Linear Actuator Up:
-		case 112:
-		case 113:
-		case 114:
-		case 115:
-			Set_Mode(RC_Mode);
-			Select_Motor_Controller(2);
-			strcpy(Output_Command, " 1000\r");
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command + 1));		
-		break;
-
-		//Linear Actuator Down:	
-		case 120:
-		case 121:
-		case 122:
-		case 123:
-			Set_Mode(RC_Mode);
-			Select_Motor_Controller(2);
-			strcpy(Output_Command," -1000\r");
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command + 1));		
-		break;
-
-		//Linear Actuator OFF:
-		case 116:
-		case 117:
-		case 118:
-		case 119:
-		case 124:
-		case 125:
-		case 126:
-		case 127:
-			Set_Mode(RC_Mode);
-			Select_Motor_Controller(2);
-			strcpy(Output_Command, " 0\r");
-			USART_Transmit(Output_Command, (((unsigned char *)strchr(Output_Command, '\r')) - Output_Command + 1));		
-		break;
-
-		//All other commands:
-		default:
-			if (Data & 128)	{return 0;}
-			Set_Mode(Safety_Mode);
-			return 1;
-		break;
-	}//End switch
-
-	return 0;
-}//End Decrypt_Data
-*/
+}
 
 uint8_t Decrypt_Data(unsigned char Data)
 {
@@ -1947,27 +1406,29 @@ uint8_t Decrypt_Data(unsigned char Data)
 
 		//Autonomous Mode:
 		case 255:
-			Set_Mode(Autonomous_Mode);
+			Set_Mode(AUTONOMOUS_MODE);
 			return 0;
 		break;
 
 		//All other commands:
 		default:
 			if (Data & 128) {return 0;}
-			Set_Mode(Safety_Mode);
+			Set_Mode(SAFETY_MODE);
 			return 1;
 		break;
-	}//End switch
+	}
 
-	Set_Mode(RC_Mode);
+	Set_Mode(RC_MODE);
 
-	if (Data < 96)	{Select_Motor_Controller(1);}
-	else		{Select_Motor_Controller(2);}
+	if (Data < 96)	
+		Select_Motor_Controller(1);
+	else		
+		Select_Motor_Controller(2);
 
 	USART_Transmit(Output_Command, Size);
 
 	return 0;
-}//End Decrypt_Data
+}
 
 #ifdef TWI_ENABLED
 /*Transmit_Energy_Data*/
