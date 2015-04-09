@@ -2,15 +2,15 @@
 flags = -Os
  
 makeCompile: Sigmux.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/security.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/wlan.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/socket.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/hci.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/cc3000_common.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/evnt_handler.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/netapp.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/nvmem.c
-	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000HostDriver/spi.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/security.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/wlan.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/socket.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/hci.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/cc3000_common.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/evnt_handler.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/netapp.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/nvmem.c
+	avr-gcc -g $(flags) -mmcu=atmega32u4 -c ./CC3000/spi.c
 	avr-gcc -g $(flags) -mmcu=atmega32u4 -c Sigmux.c
 	avr-gcc -g $(flags) -mmcu=atmega32u4 -o Sigmux.elf ./Sigmux.o ./spi.o ./socket.o ./wlan.o ./nvmem.o ./cc3000_common.o ./evnt_handler.o ./hci.o ./netapp.o ./security.o
 	rm *.o
@@ -29,15 +29,15 @@ setDefault:
 	sudo avrdude -c USBtiny -p atmega32u4 -U lfuse:w:0x5e:m -U hfuse:w:0x99:m -U efuse:w:0xf3:m
  
 build_lib:
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/security.c
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/wlan.c
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/socket.c
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/hci.c
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/cc3000_common.c
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/evnt_handler.c
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/netapp.c
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/nvmem.c
-	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000HostDriver/spi.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/security.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/wlan.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/socket.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/hci.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/cc3000_common.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/evnt_handler.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/netapp.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/nvmem.c
+	avr-gcc -g -O3 -mmcu=atmega32u4 -c ./CC3000/spi.c
 	rm *.o         
  
 clean:
