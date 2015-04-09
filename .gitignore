@@ -1,2 +1,5 @@
 *.o
 *.c~
+makefile
+Sigmux.elf
+Sigmux.hex

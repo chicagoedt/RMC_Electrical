@@ -31,16 +31,7 @@
 
 //	#define CC3000_RX_BUFFER_SIZE   (CC3000_MINIMAL_TX_SIZE)
 //	#define CC3000_TX_BUFFER_SIZE   (CC3000_MAXIMAL_TX_SIZE)
-/*	
-	//*****************************************************************************
-	//                  ERROR CODES
-	//*****************************************************************************
-	#define ESUCCESS        0
-	#define EFAIL          -1
-	#define EERROR          EFAIL
 
-	//=============================================================================
-*/
 	#define READ                            (3)
 	#define WRITE                           (1)
 	#define HI(value)                       (((value) & 0xFF00) >> 8)
