@@ -55,21 +55,20 @@ inline void Initialization (void)
 	 #endif	
 
 	//Turn on the Power LED to identify that the device is on.
-	DDRC |= (1 << DDC7);		//STATUS LED
+	// [UNUSED] DDRC |= (1 << DDC7);		//STATUS LED
 
     //Set up the LEDs for WLAN_ON and DHCP:
-    DDRB |= (1 << DDB6);    //WLAN_INIT LED
-    DDRC |= (1 << DDC6);    //DHCP_Complete LED. This will turn on and very slowly blink
+    DDRC |= (1 << DDC6);    //WLAN_INIT LED
+    DDRC |= (1 << DDC7);    //DHCP_Complete LED. This will turn on and very slowly blink
 
-    DDRD |= (1 << DDD4); 	// MUX Select line, setting as output.
+    DDRB |= (1 << DDB7); 	// MUX Select line, setting as output.
 
-    DDRF |= (1 << DDF0);	// DDRF set outbound for Safe Mode LED
-    DDRF |= (1 << DDF1);	// DDRF set outbound for RC Mode LED
-    DDRF |= (1 << DDF6);	// DDRF set outbound for Autonomous Mode LED
+    DDRE |= (1 << DDE2);	// DDRF set outbound for Safe Mode LED
+    DDRD |= (1 << DDD6);	// DDRF set outbound for Manual Mode LED
+    DDRD |= (1 << DDD4);	// DDRF set outbound for Auto Mode LED
 
-    PORTF |= (1 << PF0);
-    PORTF |= (1 << PF1);
-    PORTF |= (1 << PF6);
+    PORTF |= (1 << PF0);	// Extra GPIO Pin
+    PORTF |= (1 << PF1);	// Extra GPIO Pin
 
 	#ifndef SKIP_BOOT
 		DDRB |= (1 << DDB4);
@@ -92,21 +91,20 @@ inline void Initialization (void)
 	_delay_ms(500);
 	PORTF &= ~(1 << PF0);
     PORTF &= ~(1 << PF1);
-    PORTF &= ~(1 << PF6);
 
-	#ifdef ENERGY_ANALYSIS_ENABLED
-		//Enable Timer/Counter0 Interrupt on compare match of OCR0A:
-		TIMSK0 = (1 << OCIE0A); 		
+	// #ifdef ENERGY_ANALYSIS_ENABLED
+	// 	//Enable Timer/Counter0 Interrupt on compare match of OCR0A:
+	// 	TIMSK0 = (1 << OCIE0A); 		
 
-		//Set the Output Compare Register for the timer to compare against:
-		OCR0A = Energy_Analysis_Interval;
+	// 	//Set the Output Compare Register for the timer to compare against:
+	// 	OCR0A = Energy_Analysis_Interval;
 
-		//Configure the ADC to have the reference pin be AREF on pin 21, and make sure everything is set to defaults:
-		ADMUX = 0x00;	
+	// 	//Configure the ADC to have the reference pin be AREF on pin 21, and make sure everything is set to defaults:
+	// 	ADMUX = 0x00;	
 		
-		//Enable the Analog to Digital Conversion (ADC):
-		ADCSRA = (1 << ADEN);		//25 Clock cycles to initialize.	
-	#endif	
+	// 	//Enable the Analog to Digital Conversion (ADC):
+	// 	ADCSRA = (1 << ADEN);		//25 Clock cycles to initialize.	
+	// #endif	
 
 	#ifdef CC3000_ENABLED
 
@@ -340,19 +338,19 @@ uint8_t Set_Mode(uint8_t New_Mode)
 //==========================================================================================================
 //==========================================================================================================
 
-#ifdef USB_ENABLED
-	inline void Enable_USB_Controller()
-	{
-		USBCON = (1 << USBE);		//Enable the USB Controller.
-		UDCON &= ~(1 << LSM);		//Make sure the USB is in full speed mode.
-		UDCON &= ~(1 << DETACH);	//Re-attach all devices.
-	}//End Enable_USB_Controller
+// #ifdef USB_ENABLED
+// 	inline void Enable_USB_Controller()
+// 	{
+// 		USBCON = (1 << USBE);		//Enable the USB Controller.
+// 		UDCON &= ~(1 << LSM);		//Make sure the USB is in full speed mode.
+// 		UDCON &= ~(1 << DETACH);	//Re-attach all devices.
+// 	}//End Enable_USB_Controller
 
-	inline void Disable_USB_Controller()
-	{
-		UDCON |= (1 << DETACH);		//Detach all devices on the USB line.
-	}//End Diable_USB_Controller
-#endif
+// 	inline void Disable_USB_Controller()
+// 	{
+// 		UDCON |= (1 << DETACH);		//Detach all devices on the USB line.
+// 	}//End Diable_USB_Controller
+// #endif
 
 //==========================================================================================================
 //==========================================================================================================
@@ -598,24 +596,24 @@ inline void Transmit_Energy_Data()
 
 ///NEEDS TO BE REVISED:
 //Energy Analysis:
-#ifdef ENERGY_ANALYSIS_ENABLED
-	ISR (TIMER0_COMPA_vect)
-	{
-	/*
-		uint16_t Temp_Power = 0;
-		//Set the ADMUX to collect data from ADC0 and compare it against AREF to find the battery voltage: 
-		ADMUX = 0x00;
+// #ifdef ENERGY_ANALYSIS_ENABLED
+// 	ISR (TIMER0_COMPA_vect)
+// 	{
+	
+// 		uint16_t Temp_Power = 0;
+// 		//Set the ADMUX to collect data from ADC0 and compare it against AREF to find the battery voltage: 
+// 		ADMUX = 0x00;
 
-		ADCSRA |= (1 << ADSC); //Trigger ADC conversion.
+// 		ADCSRA |= (1 << ADSC); //Trigger ADC conversion.
 
-		//Wait until the conversion is complete (ADSC = 0) then complete:
-		while (ADCSRA & (1 << ADSC));
+// 		//Wait until the conversion is complete (ADSC = 0) then complete:
+// 		while (ADCSRA & (1 << ADSC));
 
-		//Collect the data:
-		Temp_Power = 0;
-	*/
-	}//End Timer/Counter 0 Compare Match
-#endif //End ENERGY_ANALYSIS_ENABLED
+// 		//Collect the data:
+// 		Temp_Power = 0;
+	
+// 	}//End Timer/Counter 0 Compare Match
+// #endif //End ENERGY_ANALYSIS_ENABLED
 //------------------------------------------------------------------------------------------------------
 
 //CC3000 Data Output Request:

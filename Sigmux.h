@@ -121,41 +121,35 @@
 /*======================================================================================================
  *Pin Assignments:
  *
- * PB0 (SS)   :				[OUTPUT]  	{CC3000 CS} 
- * PB1 (SCLK) :				[OUTPUT]  	{CC3000 SCK}
- * PB2 (MOSI) :				[OUTPUT]  	{CC3000 MOSI}
- * PB3 (MISO) :				[INPUT]   	{CC3000 MISO}
- * PB5 (PCINT5/OC1A/!OC4B/ADC12) :	[OUTPUT]  	{CC3000 VBEN}
- * PB4 () :				[OUTPUT]	{TWI Error LED}
- * PB6 (...) :				[OUTPUT]	{CC3000 WLAN_Enabled LED}
- * PB7 () :				[OUTPUT]	{Demux Select Line 1}
+ * CC3000:
+ * PE6 (INT.6/AIN0) :				[INPUT]  	{CC3000 IRQ}
+ * PB0 (SS)   :						[OUTPUT]  	{CC3000 CS} 
+ * PB1 (SCLK) :						[OUTPUT]  	{CC3000 SCK}
+ * PB2 (MOSI) :						[OUTPUT]  	{CC3000 MOSI}
+ * PB3 (MISO) :						[INPUT]   	{CC3000 MISO}
+ * PD7 (T0/OC4D/ADC10) :			[OUTPUT]  	{CC3000 VBEN}
  *
- * PC6 (OC3A/!OC4B) :  			[OUTPUT]  	{CC3000 DHCP Complete LED}
- * PC7 (ICP3/CLK0/OC4A) :		[OUTPUT]	{Status 0 LED}
+ * LEDs:
+ * PE2 (!HWB) :						[OUTPUT]	{Safe Mode LED}
+ * PD4 (ICP1/ADC8) :				[OUTPUT]	{Auto Mode LED}
+ * PD6 (T1/!OC4D/ADC9) :			[OUTPUT]	{Manual Mode LED}
+ * PC6 (OC3A/!OC4A) :				[OUTPUT]	{CC3000 WLAN_Enabled LED}
+ * PC7 (ICP3/CLK0/OC4A) :  			[OUTPUT]  	{CC3000 DHCP Complete LED}
+ * PB4 () :							[UNUSED]	{TWI Error LED}
+ *
  * 
- * PD0 (OC0B/SCL/INT0) :		[UNUSED]	{TWI SCL Line}
- * PD1 (SDA/INT1) :			[UNUSED]	{TWI SDA Line}
- * PD2 (RXD1/INT2) :			[INPUT]  	{CC3000 IRQ}
- * PD3 (TXD1) : 			[OUTPUT] 	{RoboteQ RS232 Tx}
- * PD4 (ICP1/ADC8) :		[OUTPUT]	{Multiplexer Select A}
- * PD5 (XCK1/!) : 			[OUTPUT] 	{Demux Select Line 0}
- * PD6 (T1/OC4D/ADC9) :			[UNUSED]	{Status 1 LED}
- * PD7 (T0/OC4D/ADC10) :		[UNUSED]	{Status 2 LED}
+ * PD0 (OC0B/SCL/INT0) :			[UNUSED]	{UNUSED GPIO}
+ * PD1 (SDA/INT1) :					[UNUSED]	{UNUSED GPIO}
+ * PD3 (TXD1/INT3) : 				[OUTPUT] 	{TX Line}
+ * PB7 (PCINT7/OC0A/OC1C/!RTS) :	[OUTPUT]	{Mux Select Line}
  *
- * PF0 (ADC0) :				[OUTPUT]	{Mux Select Line}
- * PF1 (ADC1) :				[UNUSED]  	{Battery Voltage}
  *
- * Pin 2 (UVcc) :			[USB ]
- * Pin 3 (D-  ) :			[USB Data]
- * Pin 4 (D+  ) :			[USB Data]
- * Pin 5 (UGnd) :			[USB ]
- * Pin 6 (UCap) :			[USB ]
- * Pin 7 (VBus) :			[USB ]
+ * PF0 (ADC0) :						[UNUSED]	{GPIO}
+ * PF1 (ADC1) :						[UNUSED]  	{GPIO}
  *
- * Pin 16 (XTAL_2) :			[External Clock] {NOT USED}
- * Pin 17 (XTAL_1) :			[External Clock] {NOT USED}
  *
- * Pin 42 (ARef  ) :			[Reference Voltage]
+ * Pin 16 (XTAL_2) :				[External Clock] 
+ * Pin 17 (XTAL_1) :				[External Clock] 
  *
  *======================================================================================================*/
 
@@ -202,7 +196,7 @@
  *			battery system periodically.
  *			By default this flag is enabled. To disable power analysis, replace #define with #undef.
  */
-#undef ENERGY_ANALYSIS_ENABLED
+// #undef ENERGY_ANALYSIS_ENABLED
 
 /*
  *	@brief POWER_SAVING is a preprocessor flag that is used to enable/disable MCU sleep commands for power consumption saving.
@@ -220,7 +214,7 @@
 	@brief USB_ENABLED is a preprocessor flag that is used to enable/diable all USB communications (i.e. diable the autonomous mode).
 	By default this flag is enabled. To disable the USB controller, replace #define with #undef
 */
-#undef USB_ENABLED
+// #undef USB_ENABLED
 
 /**
 
@@ -269,9 +263,9 @@ to I2C). This is used to interface the Sigmux to the energy monitor system and a
 //------------------------------------------------------------------------------------------------------------
 //Preprocessor Definitions:
 //------------------------------------------------------------------------------------------------------------
-#define Energy_Analysis_Interval 		(100)		//100ms
-#define Energy_Analysis_Reference 		(12)		//12V
-#define Energy_Analysis_Resistance 		(10)   		//10 Ohms
+// #define Energy_Analysis_Interval 		(100)		//100ms
+// #define Energy_Analysis_Reference 		(12)		//12V
+// #define Energy_Analysis_Resistance 		(10)   		//10 Ohms
 
 //UART Definitions:
 #define BAUD 					115200		//115200 bits/second
@@ -291,7 +285,7 @@ to I2C). This is used to interface the Sigmux to the energy monitor system and a
 #define MAX_COMMAND_SIZE				23  // For example:   @00!G 1 600_@00!G 2 500
 
 //TWI Definitions:
-#define Energy_Monitor_Address			(0x00)
+// #define Energy_Monitor_Address			(0x00)
 
 //Sigmux Mode Definitions:
 #define U 								(4) //00000100			
@@ -413,10 +407,10 @@ void Select_Motor_Controller(uint8_t Motor);
 
 void Mux_Select(uint8_t selection); 
 
-#ifdef USB_ENABLED
-	inline void Enable_USB_Controller(void);
-	inline void Disable_USB_Controller(void);
-#endif
+// #ifdef USB_ENABLED
+// 	inline void Enable_USB_Controller(void);
+// 	inline void Disable_USB_Controller(void);
+// #endif
 
 #ifdef CC3000_ENABLED
 	//Required for CC3000 Initialization:	
@@ -444,10 +438,10 @@ void Mux_Select(uint8_t selection);
 //############################################################################################################
 //Global Variables:
 	
-#ifdef ENERGY_ANALYSIS_ENABLED
-	static volatile uint32_t Samples_Taken = 0;	 
-	static volatile uint32_t Total_Power   = 0;
-#endif
+// #ifdef ENERGY_ANALYSIS_ENABLED
+// 	static volatile uint32_t Samples_Taken = 0;	 
+// 	static volatile uint32_t Total_Power   = 0;
+// #endif
 
 static long Socket_Handle;
 static sockaddr Mission_Control_Address;
