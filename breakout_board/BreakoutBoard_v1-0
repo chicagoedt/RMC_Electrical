@@ -6,7 +6,7 @@ FileVersion[20070407]
 PCB["" 600000 500000]
 
 Grid[1000.0 0 0 0]
-Cursor[0 99000 0.000000]
+Cursor[0 0 0.000000]
 PolyArea[3100.006200]
 Thermal[0.500000]
 DRC[1000 1000 1000 1000 1500 1000]
@@ -1023,6 +1023,10 @@ Layer(1 "Bottom")
 	Line[360000 68591 338000 90591 7500 2000 "clearline"]
 	Text[64000 67000 0 170 "+" "clearline"]
 	Text[65000 154000 0 170 "-" "clearline"]
+	Text[426000 40000 0 170 "+" "clearline"]
+	Text[426000 63000 0 170 "-" "clearline"]
+	Text[441000 152000 0 170 "+" "clearline"]
+	Text[442000 171000 0 170 "-" "clearline"]
 )
 Layer(2 "Top")
 (
