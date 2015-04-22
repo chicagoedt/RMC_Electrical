@@ -276,14 +276,8 @@ uint8_t Set_Mode(uint8_t New_Mode)
 			case SAFETY_MODE:
 
 				Mux_Select(ATMEGA_TX);	
-
-				/* Need to make this only send to one motor controller
-				   Select_Motor_Controller(1);
-				   USART_Transmit(Kill_Command, 4);
-				   Select_Motor_Controller(2);
-                   USART_Transmit(Kill_Command, 4);
-				*/
-					
+						
+				USART_Transmit (Kill_Command, 4);		// 4 is size of command
 				// Stop the Linear Actuator 01/11
                 // PORTD &= ~(1 << PD7);
                 // PORTD &= ~(1 << PD6);
@@ -298,24 +292,23 @@ uint8_t Set_Mode(uint8_t New_Mode)
 				//Do not forward any CC3000 motor controller commands.
 
 				Mux_Select(ARM_FTDI_SELECT);
-				Current_Mode = AUTONOMOUS_MODE;
+				USART_Transmit (Kill_Command, 4);
+				USART_Transmit (Go_Command, 4);
+
 				PORTD |= (1 << PORTD4);				// Autonomous Mode LED on
+				Current_Mode = AUTONOMOUS_MODE;
+				
 				break;
 
 			case RC_MODE:
-				//unsigned char Go_Command[] = "!MG\r";
-                    
+
 				Mux_Select(ATMEGA_TX);
 
-	    		Select_Motor_Controller(1);
+				USART_Transmit (Kill_Command, 4);
 	    		USART_Transmit(Go_Command, 4);
-
-	    		Select_Motor_Controller(2);
-	    		USART_Transmit(Go_Command, 4);				
 				
-				// PORTC |= (1 << PORTC7);  // Krystian Note- Should check what this does
-				Current_Mode = RC_MODE;
 				PORT |= (1 << PORTD6);		// Manual Mode LED on
+				Current_Mode = RC_MODE;
 				break;
 
 			default:
@@ -475,6 +468,7 @@ uint8_t Recieve_WiFi_Data()
 
 	// Check if Temp_Buffer index 0 
 	//Decipher the data transmitted to see if it matches the protocol (if it doesn't ERROR):
+
 	if(Temp_Buffer[0]) 
 		Decrypt_Data(Temp_Buffer[0]); 
 
@@ -489,11 +483,11 @@ void Select_Motor_Controller(uint8_t Motor)
 	{
 		case 0:		//Wheel Controller
 		case 1:		
-			PORTD &= ~(1 << PORTD5);
+			PORTD &= ~(1 << PORTD5);		// Does nothing...
 		break;
 
 		case 2:		//Mechanism & Linear Actuator Controller
-			PORTD |= (1 << PORTD5);
+			PORTD |= (1 << PORTD5);			// Does nothing...
 		break;
 
 		default:	//Invalid intput
@@ -536,6 +530,7 @@ uint8_t Decrypt_Data(unsigned char Data)
 
 	return 0;
 }
+
 
 // #ifdef TWI_ENABLED
 // /*Transmit_Energy_Data*/
@@ -626,9 +621,9 @@ ISR (INT2_vect)
 #ifdef ROUTER_WATCHDOG_ENABLED
 	ISR (TIMER1_COMPA_vect)
 	{
-///DEBUG:
-PORTC ^= (1 << PORTC7);	
-///
+		///DEBUG:
+		PORTC ^= (1 << PORTC7);	
+		///
 		++Count;		//Multiply count by five to get the number of seconds that have passed.
-	}//End Timer1_Compare_A Match 
+	}					//End Timer1_Compare_A Match 
 #endif //End ROUTER_WATCHDOG_ENABLED
