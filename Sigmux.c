@@ -56,14 +56,15 @@ inline void Initialization (void)
     DDRC |= (1 << DDC6);    	// WLAN_INIT LED
     DDRC |= (1 << DDC7);    	// DHCP_Complete LED. This will very slowly blink
 
+    DDRD |= (1 << DDD7);		// DDRD7 set outbound for CC3000 VBEN pin
     DDRB |= (1 << DDB7); 		// DDRB7 set outbound for Mux Select Line
 
     DDRE |= (1 << DDE2);		// DDRE2 set outbound for Safe Mode LED
     DDRD |= (1 << DDD6);		// DDRD6 set outbound for Manual Mode LED
     DDRD |= (1 << DDD4);		// DDRD4 set outbound for Auto Mode LED
 
-    PORTF |= (1 << PF0);		// Extra GPIO Pin
-    PORTF |= (1 << PF1);		// Extra GPIO Pin
+    DDRF |= (1 << DDF0);		// Extra GPIO Pin
+    DDRF |= (1 << DDF1);		// Extra GPIO Pin
 
 	// #ifndef SKIP_BOOT
 	// 	DDRB |= (1 << DDB4);
@@ -282,8 +283,8 @@ uint8_t Set_Mode(uint8_t New_Mode)
                 // PORTD &= ~(1 << PD7);
                 // PORTD &= ~(1 << PD6);
 
-				//Signal that the unit is in safety mode.
-				PORTE |= (1 << PORTE2);			// Safe Mode LED on
+				PORTE |= (1 << PORTE2);					// Safe Mode LED on
+				_delay_ms(500);
 				Current_Mode = SAFETY_MODE;
 				break;
 
@@ -295,7 +296,8 @@ uint8_t Set_Mode(uint8_t New_Mode)
 				USART_Transmit (Kill_Command, 4);
 				USART_Transmit (Go_Command, 4);
 
-				PORTD |= (1 << PORTD4);				// Autonomous Mode LED on
+				PORTD |= (1 << PORTD4);					// Autonomous Mode LED on
+				_delay_ms(500);
 				Current_Mode = AUTONOMOUS_MODE;
 				
 				break;
@@ -307,7 +309,7 @@ uint8_t Set_Mode(uint8_t New_Mode)
 				USART_Transmit (Kill_Command, 4);
 	    		USART_Transmit(Go_Command, 4);
 				
-				PORT |= (1 << PORTD6);		// Manual Mode LED on
+				PORTD |= (1 << PORTD6);		// Manual Mode LED on
 				Current_Mode = RC_MODE;
 				break;
 
@@ -420,10 +422,10 @@ void Write_WLAN_Pin(unsigned char val)
 	switch (val)
 	{
 		case 0:
-			PORTB &= ~(1 << PORTB5);
+			PORTD &= ~(1 << PORTD7);		// VBEN
 			break;
 		case 1:
-			PORTB |= (1 << PORTB5);
+			PORTD |= (1 << PORTD7);			// VBEN
 			break;
 	}
 }
@@ -431,14 +433,14 @@ void Write_WLAN_Pin(unsigned char val)
 void WLAN_Interrupt_Enable()
 {
 	//Set the interrupt to occur when the pinout is falling:
-	EICRA = (1 << ISC21);
-	EIMSK |= (1 << INT2);
+	EICRA = (1 << ISC61);
+	EIMSK |= (1 << INT6);
 
 }
 
 void WLAN_Interrupt_Disable()
 {
-	EIMSK &= ~(1 << INT2);
+	EIMSK &= ~(1 << INT6);
 }
 
 uint8_t Recieve_WiFi_Data()
@@ -609,7 +611,7 @@ uint8_t Decrypt_Data(unsigned char Data)
 //------------------------------------------------------------------------------------------------------
 
 //CC3000 Data Output Request:
-ISR (INT2_vect)
+ISR (INT6_vect)
 {
 	SPI_IRQ();
 	return;

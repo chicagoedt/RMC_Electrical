@@ -248,7 +248,7 @@ to I2C). This is used to interface the Sigmux to the energy monitor system and a
 	By default this flag is enabled. To disable the TWI system, replace #define with #undef
 */
 
-#define TWI_ENABLED
+#undef TWI_ENABLED
 
 
 /**
