@@ -23,3 +23,18 @@ We decided to use the Adafruit Arduino library for the CC3000. We are using a mo
     * if safe mode:
         * switch MUX select pin to LOW
         * but don't send anything on the Serial line (or send empty command)
+
+## CC3000 Initialization
+* Create cc3000 object in global context
+* Setup:
+    * Check that cc3000.begin() returns true
+    * Disable netapp timeout
+    * Check Firmware version
+    * Print out some debugging info
+    * Attempt connection to AP
+    * Check for DHCP and timeout after 20 seconds
+    * Attempt connection to UDP once
+* Loop:
+    * if UDP not connected, reboot (disabled?)
+    * if UDP available, read a value, switch LEDs on
+    * delay(100)

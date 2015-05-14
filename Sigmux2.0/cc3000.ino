@@ -54,51 +54,30 @@ static volatile uint8_t currentMode;
 void setup()
 {
 	Serial.begin(115200);
-
+    // Check that cc3000.begin() returns true
 	while (!cc3000.begin())
 	{
 		Serial.println(F("Unable to initialize the CC3000! Check your wiring?"));
 		delay(500);
 	}
 	
-	// Per http://e2e.ti.com/support/low_power_rf/f/851/t/292664.aspx
-	// aucInactivity needs to be set to 0 (never timeout) or the socket will close after
-	// 60 seconds of no activity
-	unsigned long aucDHCP       = 14400;
-	unsigned long aucARP        = 3600;
-	unsigned long aucKeepalive  = 30;
-	unsigned long aucInactivity = 0;
+    // Disable TCP timeout
+	disableIdleTimout();
 	
-	if(aucInactivity == 0)
-		Serial.println(F("Setting netapp to not timeout"));
-	else
-	{
-		Serial.print(F("Setting netapp to timeout in "));
-		Serial.print(aucInactivity);
-		Serial.println(F(" Seconds"));
-	}
-	
-	long iRet = netapp_timeout_values(&aucDHCP, &aucARP, &aucKeepalive, &aucInactivity);
-	
-	if (iRet != 0)
-	{
-		Serial.print(F("Could not set netapp option, iRet = "));
-		Serial.println(iRet);
-		Serial.println(F(", aborting..."));
-		while(1);
-	}
-	
+    // Check Firmware version
 	uint16_t firmware = checkFirmwareVersion();
-	 
 	if (firmware < 0x113)
 	{
 		Serial.println(F("Wrong firmware version!"));
 		while(1);
 	}
   
-        displayDriverMode();
+    // Print out some debugging info
+    displayDriverMode();
 	displayMACAddress();
   
+    // Attempt connection to AP
+
 	// NOTE: Secure connections are not available in 'Tiny' mode!
 	// By default connectToAP will retry indefinitely, however you can pass an
 	//  optional maximum number of retries (greater than zero) as the fourth parameter.
@@ -114,7 +93,7 @@ void setup()
         
         //wlan_disconnect();
 	
-        if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY))
+    if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY))
 	{
 		Reboot("Connecting to AP - Failed", 1);
 		return;
@@ -122,9 +101,8 @@ void setup()
    
 	Serial.println(F("OK"));
   
-	// Wait for DHCP to complete
-	
-        unsigned long dhcpTimeout = 20000;	// Try for 20 sec
+    // Check for DHCP and timeout after 20 seconds
+    unsigned long dhcpTimeout = 20000;	// Try for 20 sec
 	unsigned long retry       = 0;
    
 	for(unsigned long t = millis(); ((millis() - t) <= dhcpTimeout);)
@@ -148,24 +126,20 @@ void setup()
 		delay(1000);
 	}
 	
+    // Attempt connection to UDP
 	uint32_t bindIP = displayConnectionDetails();
-	
 	uint32_t ip = cc3000.IP2U32(192, 168, 1, 192);	// EDT Panel IP
-
 	udpClient   = cc3000.connectUDP(ip, EDT_UDP_SERVICE, 0);
 	
 	if( udpClient.connected() )
-	{
           Serial.println(F("UDP Kurwa Connected"));
-        }
-                
-	else
+    else
 		Serial.println(F("UDP Kurwa is dead"));
 }
 
 void loop()
 {
-		if( udpClient.connected() == false )
+		if(!udpClient.connected())
 			Reboot("Lost connection in main loop", 10);
 		
 		if( udpClient.available() )
@@ -269,6 +243,35 @@ void displayMACAddress(void)
 		Serial.print(F("MAC Address : "));
 		cc3000.printHex((byte*)&macAddress, 6);
 	}
+}
+
+void disableIdleTimout() {
+    // Per http://e2e.ti.com/support/low_power_rf/f/851/t/292664.aspx
+    // aucInactivity needs to be set to 0 (never timeout) or the socket will close after
+    // 60 seconds of no activity
+    unsigned long aucDHCP       = 14400;
+    unsigned long aucARP        = 3600;
+    unsigned long aucKeepalive  = 30;
+    unsigned long aucInactivity = 0;
+    
+    if(aucInactivity == 0)
+        Serial.println(F("Setting netapp to not timeout"));
+    else
+    {
+        Serial.print(F("Setting netapp to timeout in "));
+        Serial.print(aucInactivity);
+        Serial.println(F(" Seconds"));
+    }
+    
+    long iRet = netapp_timeout_values(&aucDHCP, &aucARP, &aucKeepalive, &aucInactivity);
+    
+    if (iRet != 0)
+    {
+        Serial.print(F("Could not set netapp option, iRet = "));
+        Serial.println(iRet);
+        Serial.println(F(", aborting..."));
+        while(1);
+    }
 }
 
 void MuxSelect(uint8_t selection)
