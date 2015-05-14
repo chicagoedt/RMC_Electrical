@@ -50,7 +50,6 @@ Adafruit_CC3000_Client udpClient;
 
 static volatile uint8_t currentMode;
 
-
 void setup()
 {
 	Serial.begin(115200);
@@ -168,8 +167,10 @@ void loop()
             uint8_t dig         = 0;
             uint8_t left        = 0;
             uint8_t right       = 0;
-             
-            parseCommand(command, &actuator, &dig, &currentMode, &left, &right)
+            
+            uint8_t mode = currentMode;
+            parseCommand(command, &actuator, &dig, &mode, &left, &right);
+            currentMode = mode;  // workaround because currentMode is volatile
             // for debugging
             Serial.print("command bytes received: "); Serial.println(command);
             Serial.print("actuator: "); Serial.println(actuator);
@@ -316,7 +317,7 @@ void disableIdleTimout() {
  *
  *
  */
-parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mode, uint8_t* left, uint8_t* right)
+void parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mode, uint8_t* left, uint8_t* right)
 {
     uint16_t ACTUATOR_MASK = 0x1800 ; // 0b 00011000 00000000
     uint8_t ACTUATOR_OFFSET = 11;
