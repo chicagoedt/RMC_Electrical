@@ -147,19 +147,47 @@ void loop()
             // TODO need to read commands from CC3000 and 
             // decide what exactly to do (switch mode or 
             // send more data to motor controllers)
-			char val = 0;
-			udpClient.read(&val, 1);
-			Serial.println(char(val+48));
-                        if(val == 0)
-                        {
-                          digitalWrite(4, HIGH);
-                          digitalWrite(12, LOW);
-                        }
-                        if(val == 1)
-                        {
-                          digitalWrite(4, LOW);
-                          digitalWrite(12, HIGH);
-                        }
+			// char val = 0;
+			// udpClient.read(&val, 1);
+			// Serial.println(char(val+48));
+   //                      if(val == 0)
+   //                      {
+   //                        digitalWrite(4, HIGH);
+   //                        digitalWrite(12, LOW);
+   //                      }
+   //                      if(val == 1)
+   //                      {
+   //                        digitalWrite(4, LOW);
+   //                        digitalWrite(12, HIGH);
+   //                      }
+
+            // parse command
+            uint16_t command    = 0; udpClient.read(&command, 2);
+
+            uint8_t actuator    = 0;
+            uint8_t dig         = 0;
+            uint8_t left        = 0;
+            uint8_t right       = 0;
+             
+            parseCommand(command, &actuator, &dig, &currentMode, &left, &right)
+            // for debugging
+            Serial.print("command bytes received: "); Serial.println(command);
+            Serial.print("actuator: "); Serial.println(actuator);
+            Serial.print("dig: "); Serial.println(dig);
+            Serial.print("left: "); Serial.println(left);
+            Serial.print("right: "); Serial.println(right);
+            // switch modes, check if we fail
+            if(!ModeSet(currentMode))
+            {
+                // TODO PRINT OUT ERROR
+            }
+
+            // TODO if manual mode,
+            // construct RoboteQ commands and transmit over USART
+            if(currentMode == MANUAL_MODE)
+            {
+
+            }
 		}
 		
 		delay(100);
@@ -275,6 +303,56 @@ void disableIdleTimout() {
         Serial.println(F(", aborting..."));
         while(1);
     }
+}
+
+/* parses commands from CC3000 to control motors
+ *
+ * Commands come as two bytes:
+ * _____________________________________       __________________________________________
+ * | x | x | x | A1 | A2 | D | M1 | M2 |       | LW | LW | LW | LW | RW  | RW | RW | RW |
+ * -------------------------------------       ------------------------------------------
+ *                
+ *  3 empty, 2 actuator, 1 dig, 2 mode bits... 1 left sign bit, 3 left bits, 1 right sign bit, 3 right bits
+ *
+ *
+ */
+parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mode, uint8_t* left, uint8_t* right)
+{
+    uint16_t ACTUATOR_MASK = 0x1800 ; // 0b 00011000 00000000
+    uint8_t ACTUATOR_OFFSET = 11;
+    *actuator = (command & ACTUATOR_MASK) >> ACTUATOR_OFFSET;
+
+    uint16_t DIG_MASK = 0x0400 ; // 0b 00000100 00000000
+    uint8_t DIG_OFFSET = 10;
+    *dig = (command & DIG_MASK) >> DIG_OFFSET;
+
+    uint16_t MODE_MASK = 0x0300 ; // 0b 00000011 00000000
+    uint8_t MODE_OFFSET = 8;
+    uint8_t temp = (command & MODE_MASK) >> MODE_OFFSET;
+    if(temp == SAFE_MODE)
+        *mode = SAFE_MODE;
+    else if(temp == AUTONOMOUS_MODE)
+        *mode = AUTONOMOUS_MODE;
+    else if(temp == MANUAL_MODE)
+        *mode = MANUAL_MODE;
+    // else
+        // TODO ERROR
+
+    uint16_t LEFT_MASK = 0x00F0 ; // 0b 00000000 11110000
+    uint8_t LEFT_OFFSET = 4;
+    temp = (command & LEFT_MASK) >> LEFT_OFFSET;
+    *left = (temp & 0x07);  // ignore sign bit (4th bit), only take lower 3
+    // if sign bit is on, then use negative value
+    if(temp & 0x08)
+        *left = -temp;
+
+    uint16_t RIGHT_MASK = 0x000F ; // 0b 00000000 00001111
+    temp = command & RIGHT_MASK;
+    *right = (temp & 0x07);  // ignore sign bit (4th bit), only take lower 3
+    // if sign bit is on, then use negative value
+    if(temp & 0x08)
+        *right = -temp;
+
 }
 
 void MuxSelect(uint8_t selection)

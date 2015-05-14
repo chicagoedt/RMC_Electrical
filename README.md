@@ -13,6 +13,7 @@ We decided to use the Adafruit Arduino library for the CC3000. We are using a mo
     * Start in safe mode
     * Establish connection to CC3000 (command center)
 * Loop: listen to commands from command center:
+    * extract mode bits from command (first two bits in second byte)
     * if auto mode:
         * first engage safe mode for x seconds
         * then switch MUX select pin to HIGH (now ARM can talk to motor controller)
