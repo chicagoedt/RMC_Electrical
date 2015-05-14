@@ -6,10 +6,10 @@
 
 #define	LOG_DATA
 // These are the interrupt and control pins
-#define ADAFRUIT_CC3000_IRQ   7      // MUST be an interrupt pin!
+#define ADAFRUIT_CC3000_IRQ   3      // MUST be an interrupt pin!
 // These can be any two pins
-#define ADAFRUIT_CC3000_VBAT  6
-#define ADAFRUIT_CC3000_CS    17     //  http://forum.arduino.cc/index.php?topic=241369.0
+#define ADAFRUIT_CC3000_VBAT  5
+#define ADAFRUIT_CC3000_CS    10     //  http://forum.arduino.cc/index.php?topic=241369.0
 
 // Use hardware SPI for the remaining pins
 // On an UNO, SCK = 13, MISO = 12, and MOSI = 11
@@ -42,11 +42,11 @@ Adafruit_CC3000_Client udpClient;
 #define AUTONOMOUS_MODE       1
 #define MANUAL_MODE     2
 
-#ifdef SERIAL_CONVERT
-  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = ((_Data[j] << 1) ^ 0xff);}}
-#else
-  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = _Data[j];}}
-#endif
+//#ifdef SERIAL_CONVERT
+//  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = ((_Data[j] << 1) ^ 0xff);}}
+//#else
+//  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = _Data[j];}}
+//#endif
 
 static volatile uint8_t currentMode;
 
@@ -138,11 +138,16 @@ void setup()
 
 void loop()
 {
+//              Serial.println("entered main loop...");
 		if(!udpClient.connected())
+                {
 			Reboot("Lost connection in main loop", 10);
+                    Serial.println("Lost udp connection!");
+                }
 		
 		if( udpClient.available() )
 		{
+  
             // TODO need to read commands from CC3000 and 
             // decide what exactly to do (switch mode or 
             // send more data to motor controllers)
@@ -161,6 +166,7 @@ void loop()
    //                      }
 
             // parse command
+            Serial.println("attempting to read from udp socket");
             uint16_t command    = 0; udpClient.read(&command, 2);
 
             uint8_t actuator    = 0;
@@ -380,7 +386,7 @@ uint8_t ModeSet(uint8_t newMode)
         {
             case SAFE_MODE:
                 MuxSelect(MUX_TELEOP);	
-                USART_Transmit (Kill_Command, 4);	// 4 is size of command
+//                USART_Transmit (Kill_Command, 4);	// 4 is size of command
                 currentMode = SAFE_MODE;
                 delay(500);
                 break;
@@ -389,8 +395,8 @@ uint8_t ModeSet(uint8_t newMode)
                 // Listen to all communications by the computer.
                 // Do not forward any CC3000 motor controller commands.
                 MuxSelect(MUX_AUTONOMOUS);
-                USART_Transmit (Kill_Command, 4);
-                USART_Transmit (Go_Command, 4);
+//                USART_Transmit (Kill_Command, 4);
+//                USART_Transmit (Go_Command, 4);
                 digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
                 delay(500);
                 currentMode = AUTONOMOUS_MODE;
@@ -398,8 +404,8 @@ uint8_t ModeSet(uint8_t newMode)
 
             case MANUAL_MODE:
                 MuxSelect(MUX_TELEOP);
-                USART_Transmit (Kill_Command, 4);
-                USART_Transmit(Go_Command, 4);
+//                USART_Transmit (Kill_Command, 4);
+//                USART_Transmit(Go_Command, 4);
                 digitalWrite(PD6, HIGH);		// Manual Mode LED on
                 delay(500);
                 currentMode = MANUAL_MODE;
