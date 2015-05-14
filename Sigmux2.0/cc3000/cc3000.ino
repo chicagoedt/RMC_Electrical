@@ -165,8 +165,8 @@ void loop()
 
             uint8_t actuator    = 0;
             uint8_t dig         = 0;
-            uint8_t left        = 0;
-            uint8_t right       = 0;
+            int8_t left        = 0;
+            int8_t right       = 0;
             
             uint8_t mode = currentMode;
             parseCommand(command, &actuator, &dig, &mode, &left, &right);
@@ -175,6 +175,7 @@ void loop()
             Serial.print("command bytes received: "); Serial.println(command);
             Serial.print("actuator: "); Serial.println(actuator);
             Serial.print("dig: "); Serial.println(dig);
+            Serial.print("mode: "); Serial.println(currentMode);
             Serial.print("left: "); Serial.println(left);
             Serial.print("right: "); Serial.println(right);
             // switch modes, check if we fail
@@ -317,7 +318,7 @@ void disableIdleTimout() {
  *
  *
  */
-void parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mode, uint8_t* left, uint8_t* right)
+void parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mode, int8_t* left, int8_t* right)
 {
     uint16_t ACTUATOR_MASK = 0x1800 ; // 0b 00011000 00000000
     uint8_t ACTUATOR_OFFSET = 11;
@@ -345,14 +346,14 @@ void parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mo
     *left = (temp & 0x07);  // ignore sign bit (4th bit), only take lower 3
     // if sign bit is on, then use negative value
     if(temp & 0x08)
-        *left = -temp;
+        *left = -(*left);
 
     uint16_t RIGHT_MASK = 0x000F ; // 0b 00000000 00001111
     temp = command & RIGHT_MASK;
     *right = (temp & 0x07);  // ignore sign bit (4th bit), only take lower 3
     // if sign bit is on, then use negative value
     if(temp & 0x08)
-        *right = -temp;
+        *right = -(*right);
 
 }
 
