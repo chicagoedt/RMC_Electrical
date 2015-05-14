@@ -31,16 +31,16 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS,
 Adafruit_CC3000_Client udpClient;
 
 #define SERIAL_CONVERT
-#define TELEOP         0
-#define AUTONOMOUS     1
+#define MUX_TELEOP         0
+#define MUX_AUTONOMOUS     1
 #define PB7            11    // MUX select pin
 #define PD4            4     // Autonomous mode LED
 #define PD6            12    // Manual mode LED
 #define PC6            5     // WLAN LED
 
-#define SafeMode       0
-#define AutoMode       1
-#define ManualMode     2
+#define SAFE_MODE       0
+#define AUTONOMOUS_MODE       1
+#define MANUAL_MODE     2
 
 #ifdef SERIAL_CONVERT
   #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = ((_Data[j] << 1) ^ 0xff);}}
@@ -144,6 +144,9 @@ void loop()
 		
 		if( udpClient.available() )
 		{
+            // TODO need to read commands from CC3000 and 
+            // decide what exactly to do (switch mode or 
+            // send more data to motor controllers)
 			char val = 0;
 			udpClient.read(&val, 1);
 			Serial.println(char(val+48));
@@ -278,64 +281,58 @@ void MuxSelect(uint8_t selection)
 {
   switch (selection)
   {
-    case TELEOP:
-      digitalWrite(PB7, LOW);     //Set MUX Select low to allow Atmega TX line to go through MUX
-      break;
-    case AUTONOMOUS:
-      digitalWrite(PB7, HIGH);    // Set MUX Select high to allow FTDI to go through MUX
-      break;
+    case MUX_TELEOP:
+        digitalWrite(PB7, LOW);     //Set MUX Select low to allow Atmega TX line to go through MUX
+        break;
+    case MUX_AUTONOMOUS:
+        digitalWrite(PB7, HIGH);    // Set MUX Select high to allow FTDI to go through MUX
+        break;
   }
 }
 
 uint8_t ModeSet(uint8_t newMode)
 {
-  unsigned char Kill_Command[] = {'!', 'E', 'X', '\r'};//"!EX\r";
-  unsigned char Go_Command[] = {'!', 'M', 'G', '\r'};//"!MG\r";
-      
-  if (newMode != currentMode)
-  {
-    switch (newMode)
+    unsigned char Kill_Command[] = {'!', 'E', 'X', '\r'};//"!EX\r";
+    unsigned char Go_Command[] = {'!', 'M', 'G', '\r'};//"!MG\r";
+
+    if (newMode != currentMode)
     {
-      case SafeMode:
-        MuxSelect(TELEOP);	
-       // USART_Transmit (Kill_Command, 4);	// 4 is size of command
-        // Stop the Linear Actuator 01/11
-        // PORTD &= ~(1 << PD7);
-        // PORTD &= ~(1 << PD6);
-//        PORTE |= (1 << PORTE2);			// Safe Mode LED on
-//        delay(500);
-        currentMode = SafeMode;
-        break;
-      
-      case AutoMode:            
-        //Listen to all communications by the computer.
-        //Do not forward any CC3000 motor controller commands.
-      
-        MuxSelect(AUTONOMOUS);
-       // USART_Transmit (Kill_Command, 4);
-       // USART_Transmit (Go_Command, 4);
-        digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
-        delay(500);
-        currentMode = AutoMode;
-        break;
-      
-      case ManualMode:
-        MuxSelect(TELEOP);
-       // USART_Transmit (Kill_Command, 4);
-       // USART_Transmit(Go_Command, 4);
-        digitalWrite(PD6, HIGH);		// Manual Mode LED on
-        delay(500);
-        currentMode = ManualMode;
-        break;
-      
-      default:
-        return -1;
-      	break;
+        switch (newMode)
+        {
+            case SAFE_MODE:
+                MuxSelect(MUX_TELEOP);	
+                USART_Transmit (Kill_Command, 4);	// 4 is size of command
+                currentMode = SAFE_MODE;
+                delay(500);
+                break;
+
+            case AUTONOMOUS_MODE:            
+                // Listen to all communications by the computer.
+                // Do not forward any CC3000 motor controller commands.
+                MuxSelect(MUX_AUTONOMOUS);
+                USART_Transmit (Kill_Command, 4);
+                USART_Transmit (Go_Command, 4);
+                digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
+                delay(500);
+                currentMode = AUTONOMOUS_MODE;
+                break;
+
+            case MANUAL_MODE:
+                MuxSelect(MUX_TELEOP);
+                USART_Transmit (Kill_Command, 4);
+                USART_Transmit(Go_Command, 4);
+                digitalWrite(PD6, HIGH);		// Manual Mode LED on
+                delay(500);
+                currentMode = MANUAL_MODE;
+                break;
+
+            default:
+                return -1;
+                break;
+        }
+
+        return currentMode; // After setting the mode, this should now be the current mode we return
     }
-      
-    return currentMode; // After setting the mode, this should now be the current mode we return
-  }
-  else
-    return currentMode; // The current mode is not different from the new requested mode
-      	
+    else
+        return currentMode; // The current mode is not different from the new requested mode
 }
