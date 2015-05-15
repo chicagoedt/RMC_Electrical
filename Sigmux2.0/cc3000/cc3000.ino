@@ -167,7 +167,8 @@ void loop()
 
             // parse command
             Serial.println("attempting to read from udp socket");
-            uint16_t command    = 0; udpClient.read(&command, 2);
+            byte command[2];
+            udpClient.read(&command, 2);
 
             uint8_t actuator    = 0;
             uint8_t dig         = 0;
@@ -177,8 +178,11 @@ void loop()
             uint8_t mode = currentMode;
             parseCommand(command, &actuator, &dig, &mode, &left, &right);
             currentMode = mode;  // workaround because currentMode is volatile
+            
             // for debugging
-            Serial.print("command bytes received: "); Serial.println(command);
+            Serial.print("command bytes received: "); 
+            cc3000.printHexChar(command, 2);
+//            Serial.print(command[0], BIN); Serial.print(command[1], BIN); Serial.println();
             Serial.print("actuator: "); Serial.println(actuator);
             Serial.print("dig: "); Serial.println(dig);
             Serial.print("mode: "); Serial.println(currentMode);
@@ -315,17 +319,21 @@ void disableIdleTimout() {
 
 /* parses commands from CC3000 to control motors
  *
- * Commands come as two bytes:
+ * Commands come as two bytes (big-endian):
  * _____________________________________       __________________________________________
  * | x | x | x | A1 | A2 | D | M1 | M2 |       | LW | LW | LW | LW | RW  | RW | RW | RW |
  * -------------------------------------       ------------------------------------------
  *                
  *  3 empty, 2 actuator, 1 dig, 2 mode bits... 1 left sign bit, 3 left bits, 1 right sign bit, 3 right bits
  *
+ * We have to convert them to little-endian
  *
  */
-void parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mode, int8_t* left, int8_t* right)
+void parseCommand(byte* comm, uint8_t* actuator, uint8_t* dig, uint8_t* mode, int8_t* left, int8_t* right)
 {
+    // convert command bytes to little-endian
+    uint16_t command = (uint16_t)( (comm[0] << 8) | (comm[1]) );
+    
     uint16_t ACTUATOR_MASK = 0x1800 ; // 0b 00011000 00000000
     uint8_t ACTUATOR_OFFSET = 11;
     *actuator = (command & ACTUATOR_MASK) >> ACTUATOR_OFFSET;
