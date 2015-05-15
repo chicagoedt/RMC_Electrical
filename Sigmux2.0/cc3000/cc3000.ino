@@ -22,6 +22,7 @@
   #define ADAFRUIT_CC3000_CS    17     //  http://forum.arduino.cc/index.php?topic=241369.0
 #endif
 
+
 // Use hardware SPI for the remaining pins
 // On an UNO, SCK = 13, MISO = 12, and MOSI = 11
 
@@ -53,11 +54,17 @@ Adafruit_CC3000_Client udpClient;
 #define AUTONOMOUS_MODE       1
 #define MANUAL_MODE     2
 
-//#ifdef SERIAL_CONVERT
-//  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = ((_Data[j] << 1) ^ 0xff);}}
-//#else
-//  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = _Data[j];}}
-//#endif
+
+#ifdef SERIAL_CONVERT
+  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = ((_Data[j] << 1) ^ 0xff);}}
+#else
+  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = _Data[j];}}
+#endif
+
+// if we're running the UNO, we can't use USART so don't do anything
+#ifdef UNO
+  #define USART_Transmit(_Data, _Index) {}
+#endif
 
 static volatile uint8_t currentMode;
 
@@ -400,7 +407,7 @@ uint8_t ModeSet(uint8_t newMode)
         {
             case SAFE_MODE:
                 MuxSelect(MUX_TELEOP);	
-//                USART_Transmit (Kill_Command, 4);	// 4 is size of command
+                USART_Transmit (Kill_Command, 4);	// 4 is size of command
                 currentMode = SAFE_MODE;
                 delay(500);
                 break;
@@ -409,8 +416,8 @@ uint8_t ModeSet(uint8_t newMode)
                 // Listen to all communications by the computer.
                 // Do not forward any CC3000 motor controller commands.
                 MuxSelect(MUX_AUTONOMOUS);
-//                USART_Transmit (Kill_Command, 4);
-//                USART_Transmit (Go_Command, 4);
+                USART_Transmit (Kill_Command, 4);
+                USART_Transmit (Go_Command, 4);
                 digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
                 delay(500);
                 currentMode = AUTONOMOUS_MODE;
@@ -418,8 +425,8 @@ uint8_t ModeSet(uint8_t newMode)
 
             case MANUAL_MODE:
                 MuxSelect(MUX_TELEOP);
-//                USART_Transmit (Kill_Command, 4);
-//                USART_Transmit(Go_Command, 4);
+                USART_Transmit (Kill_Command, 4);
+                USART_Transmit(Go_Command, 4);
                 digitalWrite(PD6, HIGH);		// Manual Mode LED on
                 delay(500);
                 currentMode = MANUAL_MODE;
