@@ -326,7 +326,7 @@ void disableIdleTimout() {
  *                
  *  3 empty, 2 actuator, 1 dig, 2 mode bits... 1 left sign bit, 3 left bits, 1 right sign bit, 3 right bits
  *
- * We have to convert them to little-endian
+ * We have to convert them to little-endian. Note that left and right values are signed (2's complement).
  *
  */
 void parseCommand(byte* comm, uint8_t* actuator, uint8_t* dig, uint8_t* mode, int8_t* left, int8_t* right)
@@ -354,20 +354,14 @@ void parseCommand(byte* comm, uint8_t* actuator, uint8_t* dig, uint8_t* mode, in
     // else
         // TODO ERROR
 
+    // note: left and right values are signed (2's complement)
     uint16_t LEFT_MASK = 0x00F0 ; // 0b 00000000 11110000
     uint8_t LEFT_OFFSET = 4;
-    temp = (command & LEFT_MASK) >> LEFT_OFFSET;
-    *left = (temp & 0x07);  // ignore sign bit (4th bit), only take lower 3
-    // if sign bit is on, then use negative value
-    if(temp & 0x08)
-        *left = -(*left);
+    *left = (int8_t)((command & LEFT_MASK)) / 16;
+
 
     uint16_t RIGHT_MASK = 0x000F ; // 0b 00000000 00001111
-    temp = command & RIGHT_MASK;
-    *right = (temp & 0x07);  // ignore sign bit (4th bit), only take lower 3
-    // if sign bit is on, then use negative value
-    if(temp & 0x08)
-        *right = -(*right);
+    *right = ((int8_t)((command & RIGHT_MASK) << 4) ) / 16;
 
 }
 
