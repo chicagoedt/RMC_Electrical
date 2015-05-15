@@ -53,11 +53,11 @@ Adafruit_CC3000_Client udpClient;
 #define AUTONOMOUS_MODE       1
 #define MANUAL_MODE     2
 
-#ifdef SERIAL_CONVERT
-  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = ((_Data[j] << 1) ^ 0xff);}}
-#else
-  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = _Data[j];}}
-#endif
+//#ifdef SERIAL_CONVERT
+//  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = ((_Data[j] << 1) ^ 0xff);}}
+//#else
+//  #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = _Data[j];}}
+//#endif
 
 static volatile uint8_t currentMode;
 
@@ -149,11 +149,16 @@ void setup()
 
 void loop()
 {
+//              Serial.println("entered main loop...");
 		if(!udpClient.connected())
+                {
 			Reboot("Lost connection in main loop", 10);
+                    Serial.println("Lost udp connection!");
+                }
 		
 		if( udpClient.available() )
 		{
+  
             // TODO need to read commands from CC3000 and 
             // decide what exactly to do (switch mode or 
             // send more data to motor controllers)
@@ -172,7 +177,9 @@ void loop()
    //                      }
 
             // parse command
-            uint16_t command    = 0; udpClient.read(&command, 2);
+            Serial.println("attempting to read from udp socket");
+            byte command[2];
+            udpClient.read(&command, 2);
 
             uint8_t actuator    = 0;
             uint8_t dig         = 0;
@@ -182,8 +189,11 @@ void loop()
             uint8_t mode = currentMode;
             parseCommand(command, &actuator, &dig, &mode, &left, &right);
             currentMode = mode;  // workaround because currentMode is volatile
+            
             // for debugging
-            Serial.print("command bytes received: "); Serial.println(command);
+            Serial.print("command bytes received: "); 
+            cc3000.printHexChar(command, 2);
+//            Serial.print(command[0], BIN); Serial.print(command[1], BIN); Serial.println();
             Serial.print("actuator: "); Serial.println(actuator);
             Serial.print("dig: "); Serial.println(dig);
             Serial.print("mode: "); Serial.println(currentMode);
@@ -320,17 +330,21 @@ void disableIdleTimout() {
 
 /* parses commands from CC3000 to control motors
  *
- * Commands come as two bytes:
+ * Commands come as two bytes (big-endian):
  * _____________________________________       __________________________________________
  * | x | x | x | A1 | A2 | D | M1 | M2 |       | LW | LW | LW | LW | RW  | RW | RW | RW |
  * -------------------------------------       ------------------------------------------
  *                
  *  3 empty, 2 actuator, 1 dig, 2 mode bits... 1 left sign bit, 3 left bits, 1 right sign bit, 3 right bits
  *
+ * We have to convert them to little-endian. Note that left and right values are signed (2's complement).
  *
  */
-void parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mode, int8_t* left, int8_t* right)
+void parseCommand(byte* comm, uint8_t* actuator, uint8_t* dig, uint8_t* mode, int8_t* left, int8_t* right)
 {
+    // convert command bytes to little-endian
+    uint16_t command = (uint16_t)( (comm[0] << 8) | (comm[1]) );
+    
     uint16_t ACTUATOR_MASK = 0x1800 ; // 0b 00011000 00000000
     uint8_t ACTUATOR_OFFSET = 11;
     *actuator = (command & ACTUATOR_MASK) >> ACTUATOR_OFFSET;
@@ -351,20 +365,14 @@ void parseCommand(uint16_t command, uint8_t* actuator, uint8_t* dig, uint8_t* mo
     // else
         // TODO ERROR
 
+    // note: left and right values are signed (2's complement)
     uint16_t LEFT_MASK = 0x00F0 ; // 0b 00000000 11110000
     uint8_t LEFT_OFFSET = 4;
-    temp = (command & LEFT_MASK) >> LEFT_OFFSET;
-    *left = (temp & 0x07);  // ignore sign bit (4th bit), only take lower 3
-    // if sign bit is on, then use negative value
-    if(temp & 0x08)
-        *left = -(*left);
+    *left = (int8_t)((command & LEFT_MASK)) / 16;
+
 
     uint16_t RIGHT_MASK = 0x000F ; // 0b 00000000 00001111
-    temp = command & RIGHT_MASK;
-    *right = (temp & 0x07);  // ignore sign bit (4th bit), only take lower 3
-    // if sign bit is on, then use negative value
-    if(temp & 0x08)
-        *right = -(*right);
+    *right = ((int8_t)((command & RIGHT_MASK) << 4) ) / 16;
 
 }
 
@@ -392,7 +400,7 @@ uint8_t ModeSet(uint8_t newMode)
         {
             case SAFE_MODE:
                 MuxSelect(MUX_TELEOP);	
-                USART_Transmit (Kill_Command, 4);	// 4 is size of command
+//                USART_Transmit (Kill_Command, 4);	// 4 is size of command
                 currentMode = SAFE_MODE;
                 delay(500);
                 break;
@@ -401,8 +409,8 @@ uint8_t ModeSet(uint8_t newMode)
                 // Listen to all communications by the computer.
                 // Do not forward any CC3000 motor controller commands.
                 MuxSelect(MUX_AUTONOMOUS);
-                USART_Transmit (Kill_Command, 4);
-                USART_Transmit (Go_Command, 4);
+//                USART_Transmit (Kill_Command, 4);
+//                USART_Transmit (Go_Command, 4);
                 digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
                 delay(500);
                 currentMode = AUTONOMOUS_MODE;
@@ -410,8 +418,8 @@ uint8_t ModeSet(uint8_t newMode)
 
             case MANUAL_MODE:
                 MuxSelect(MUX_TELEOP);
-                USART_Transmit (Kill_Command, 4);
-                USART_Transmit(Go_Command, 4);
+//                USART_Transmit (Kill_Command, 4);
+//                USART_Transmit(Go_Command, 4);
                 digitalWrite(PD6, HIGH);		// Manual Mode LED on
                 delay(500);
                 currentMode = MANUAL_MODE;
