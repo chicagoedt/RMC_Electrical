@@ -54,6 +54,7 @@ Adafruit_CC3000_Client udpClient;
 #define AUTONOMOUS_MODE       1
 #define MANUAL_MODE     2
 
+#define SAFE_DELAY 1000      // delay in ms every time we switch to/from SAFE_MODE
 
 #ifdef SERIAL_CONVERT
   #define USART_Transmit(_Data, _Index) {uint8_t j; for (j = 0; j < _Index; ++j) { while (!( UCSR1A & (1<<UDRE1))); UDR1 = ((_Data[j] << 1) ^ 0xff);}}
@@ -68,6 +69,30 @@ Adafruit_CC3000_Client udpClient;
 
 static volatile uint8_t currentMode;
 
+int lastActuatorVal = 0;
+// constants multiplied by value from panel udp socket
+#define LEFT_WHEEL_CONSTANT 100
+#define RIGHT_WHEEL_CONSTANT 100
+#define ACTUATOR_CONSTANT 100
+#define DIG_CONSTANT 500
+
+    // Emergency stop command (!EX) to all motor controllers
+    const unsigned char KILL_COMMAND[] = {'@', '0', '1', '!', 'E', 'X',
+        '_', '@', '0', '2', '!', 'E', 'X',
+        '_', '@', '0', '3', '!', 'E', 'X',
+        '_', '@', '0', '4', '!', 'E', 'X',
+        '_', '@', '0', '5', '!', 'E', 'X', '\r'};  // length 35 chars
+    // Resume command to re-activate and come out of emergency stop
+    const unsigned char RESUME_COMMAND[] = {'@', '0', '1', '!', 'M', 'G',
+        '_', '@', '0', '2', '!', 'M', 'G',
+        '_', '@', '0', '3', '!', 'M', 'G',
+        '_', '@', '0', '4', '!', 'M', 'G',
+        '_', '@', '0', '5', '!', 'M', 'G', '\r'};  // length 35 chars
+    // current command being sent to roboteq motor controller
+    // example "@01!G 1 1000_@01!G 2 -1000_@02!G 1 1000_@02!G 2 -1000_@03!G 1 1000_@03!G 2 -1000_@04!G 1 700_@04!G 2 700_@05!G 1 500\r"
+    // max length: 14 bytes for each channel for each roboteq (4 of them have 2 channels, 1 has one channel, total 9 channels), so 14*9 = 126 bytes, add one for safety
+//    unsigned char roboteqCommand = "@01!G 1 1000_@01!G 2 -1000_@02!G 1 1000_@02!G 2 -1000_@03!G 1 1000_@03!G 2 -1000_@04!G 1 700_@04!G 2 700_@05!G 1 500\r";
+    
 void setup()
 {
 	Serial.begin(115200);
@@ -166,23 +191,6 @@ void loop()
 		if( udpClient.available() )
 		{
   
-            // TODO need to read commands from CC3000 and 
-            // decide what exactly to do (switch mode or 
-            // send more data to motor controllers)
-			// char val = 0;
-			// udpClient.read(&val, 1);
-			// Serial.println(char(val+48));
-   //                      if(val == 0)
-   //                      {
-   //                        digitalWrite(4, HIGH);
-   //                        digitalWrite(12, LOW);
-   //                      }
-   //                      if(val == 1)
-   //                      {
-   //                        digitalWrite(4, LOW);
-   //                        digitalWrite(12, HIGH);
-   //                      }
-
             // parse command
             Serial.println("attempting to read from udp socket");
             byte command[2];
@@ -201,25 +209,83 @@ void loop()
             Serial.print("command bytes received: "); 
             cc3000.printHexChar(command, 2);
 //            Serial.print(command[0], BIN); Serial.print(command[1], BIN); Serial.println();
-            Serial.print("actuator: "); Serial.println(actuator);
-            Serial.print("dig: "); Serial.println(dig);
-            Serial.print("mode: "); Serial.println(currentMode);
-            Serial.print("left: "); Serial.println(left);
-            Serial.print("right: "); Serial.println(right);
+//            Serial.print("actuator: "); Serial.println(actuator);
+//            Serial.print("dig: "); Serial.println(dig);
+//            Serial.print("mode: "); Serial.println(currentMode);
+//            Serial.print("left: "); Serial.println(left);
+//            Serial.print("right: "); Serial.println(right);
+
+               String canCommand; // Start string off with "@0" 
+               int leftMotorVal = left * LEFT_WHEEL_CONSTANT;
+               int rightMotorVal = right * RIGHT_WHEEL_CONSTANT;
+               int actuatorVal = actuator * ACTUATOR_CONSTANT;
+               int digVal = dig * DIG_CONSTANT;
+              
+              
+              // append motor value to canCommand if not zero
+              if ( leftMotorVal != 0 || rightMotorVal != 0)
+              { 
+                for (int i = 1; i <= 3; i++)
+                {
+                    if ( i != 1)
+                    {
+                       canCommand += "_";
+                    }
+                    //Serial.println(i);
+                    canCommand += "@0";
+                    canCommand += i;
+                    canCommand += "!G 1 ";
+                    
+                    canCommand += leftMotorVal;
+                    canCommand += "_@0";
+                    canCommand += i;
+                    canCommand += "!G 2 ";
+                    canCommand += rightMotorVal;
+                   
+                }
+                  
+              }
+              
+              // append actuatorVal to canCommand if last one has changed (no watchdog for actuators)
+              if( actuatorVal != lastActuatorVal)
+              {
+                 canCommand += "@04!G 1 ";
+                 canCommand += actuatorVal;
+                 canCommand += "_@04!G 2 ";
+                 canCommand += actuatorVal; 
+              }
+              lastActuatorVal = actuatorVal;  // update last actuator value
+              
+              // append digVal to canCommand
+              canCommand += "@05!G 1 ";
+              canCommand += digVal;
+              canCommand += "\r";
+
+            
             // switch modes, check if we fail
             if(!ModeSet(currentMode))
             {
                 // TODO PRINT OUT ERROR
+                Serial.print("Cannot change mode to "); Serial.println(currentMode);
             }
 
+            
+            Serial.print("CAN command is: ");
+            Serial.println(canCommand); //Send TX here
+            
             // TODO if manual mode,
             // construct RoboteQ commands and transmit over USART
             if(currentMode == MANUAL_MODE)
             {
-
+                Serial.println("Transmitting CAN command...");
+                USART_Transmit(canCommand, canCommand.length());
+            } else {
+                Serial.print("Not transmitting CAN command because we are in mode: ");
+                Serial.println(currentMode);
             }
-		}
-		
+            
+        }
+
 		delay(100);
 }
 
@@ -398,16 +464,16 @@ void MuxSelect(uint8_t selection)
 
 uint8_t ModeSet(uint8_t newMode)
 {
-    unsigned char Kill_Command[] = {'!', 'E', 'X', '\r'};//"!EX\r";
-    unsigned char Go_Command[] = {'!', 'M', 'G', '\r'};//"!MG\r";
 
+    // don't do anything if we're in same mode
     if (newMode != currentMode)
     {
         switch (newMode)
         {
             case SAFE_MODE:
+                USART_Transmit (KILL_COMMAND, 35);
+                delay(SAFE_DELAY);
                 MuxSelect(MUX_TELEOP);	
-                USART_Transmit (Kill_Command, 4);	// 4 is size of command
                 currentMode = SAFE_MODE;
                 delay(500);
                 break;
@@ -415,18 +481,20 @@ uint8_t ModeSet(uint8_t newMode)
             case AUTONOMOUS_MODE:            
                 // Listen to all communications by the computer.
                 // Do not forward any CC3000 motor controller commands.
+                USART_Transmit (KILL_COMMAND, 35);
+                delay(SAFE_DELAY);
                 MuxSelect(MUX_AUTONOMOUS);
-                USART_Transmit (Kill_Command, 4);
-                USART_Transmit (Go_Command, 4);
+                USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
                 digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
-                delay(500);
+                delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
                 currentMode = AUTONOMOUS_MODE;
                 break;
 
             case MANUAL_MODE:
+                USART_Transmit (KILL_COMMAND, 35);
+                delay(SAFE_DELAY);
                 MuxSelect(MUX_TELEOP);
-                USART_Transmit (Kill_Command, 4);
-                USART_Transmit(Go_Command, 4);
+                USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
                 digitalWrite(PD6, HIGH);		// Manual Mode LED on
                 delay(500);
                 currentMode = MANUAL_MODE;
