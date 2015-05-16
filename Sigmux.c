@@ -42,11 +42,9 @@ int main (void)
  *	@brief	Initialization is used to configure all of the registers of the microcontroller
  *			Steps:
  *				1) Initialize CC3000
- *				2) Set MUX Select_A to LOW, so we can send the Kill command from Atmega TX line 
- *					(C0 input on MUX)
+ *				2) Set MUX Select to LOW, so we can send the Kill command from Atmega TX line 
  *				3) Set Mode to Safety Mode
- *				4) Set MUX Select A to HIGH, so we get into Autonomous mode by default
- *					(C1 input on MUX) 
+ *				4) Set MUX Select to HIGH, so we get into Autonomous mode by default
  */
 inline void Initialization (void)
 {
@@ -54,43 +52,41 @@ inline void Initialization (void)
 		wdt_enable(WDTO_8S);	// WDTO_8S means set the watchdog to 8 seconds.
 	 #endif	
 
-	//Turn on the Power LED to identify that the device is on.
-	// [UNUSED] DDRC |= (1 << DDC7);		//STATUS LED
-
     //Set up the LEDs for WLAN_ON and DHCP:
-    DDRC |= (1 << DDC6);    //WLAN_INIT LED
-    DDRC |= (1 << DDC7);    //DHCP_Complete LED. This will turn on and very slowly blink
+    DDRC |= (1 << DDC6);    	// WLAN_INIT LED
+    DDRC |= (1 << DDC7);    	// DHCP_Complete LED. This will very slowly blink
 
-    DDRB |= (1 << DDB7); 	// MUX Select line, setting as output.
+    DDRD |= (1 << DDD7);		// DDRD7 set outbound for CC3000 VBEN pin
+    DDRB |= (1 << DDB7); 		// DDRB7 set outbound for Mux Select Line
 
-    DDRE |= (1 << DDE2);	// DDRF set outbound for Safe Mode LED
-    DDRD |= (1 << DDD6);	// DDRF set outbound for Manual Mode LED
-    DDRD |= (1 << DDD4);	// DDRF set outbound for Auto Mode LED
+    DDRE |= (1 << DDE2);		// DDRE2 set outbound for Safe Mode LED
+    DDRD |= (1 << DDD6);		// DDRD6 set outbound for Manual Mode LED
+    DDRD |= (1 << DDD4);		// DDRD4 set outbound for Auto Mode LED
 
-    PORTF |= (1 << PF0);	// Extra GPIO Pin
-    PORTF |= (1 << PF1);	// Extra GPIO Pin
+    DDRF |= (1 << DDF0);		// Extra GPIO Pin
+    DDRF |= (1 << DDF1);		// Extra GPIO Pin
 
-	#ifndef SKIP_BOOT
-		DDRB |= (1 << DDB4);
-		DDRD |= (1 << DDD7);
-		DDRD |= (1 << DDD6);
+	// #ifndef SKIP_BOOT
+	// 	DDRB |= (1 << DDB4);
+	// 	DDRD |= (1 << DDD7);
+	// 	DDRD |= (1 << DDD6);
 
-		PORTB |= (1 << PB4);
-		_delay_ms(200);
-		PORTD |= (1 << PD7);
-		_delay_ms(200);
-		PORTD |= (1 << PD6);
-		_delay_ms(200);
-		PORTB &= ~(1 << PB4);
-		_delay_ms(200);
-		PORTD &= ~(1 << PD7);
-		_delay_ms(200);
-		PORTD &= ~(1 << PD6);
-	#endif
+	// 	PORTB |= (1 << PB4);
+	// 	_delay_ms(200);
+	// 	PORTD |= (1 << PD7);
+	// 	_delay_ms(200);
+	// 	PORTD |= (1 << PD6);
+	// 	_delay_ms(200);
+	// 	PORTB &= ~(1 << PB4);
+	// 	_delay_ms(200);
+	// 	PORTD &= ~(1 << PD7);
+	// 	_delay_ms(200);
+	// 	PORTD &= ~(1 << PD6);
+	// #endif
 
-	_delay_ms(500);
-	PORTF &= ~(1 << PF0);
-    PORTF &= ~(1 << PF1);
+	// _delay_ms(500);
+	// PORTF &= ~(1 << PF0);
+	// PORTF &= ~(1 << PF1);
 
 	// #ifdef ENERGY_ANALYSIS_ENABLED
 	// 	//Enable Timer/Counter0 Interrupt on compare match of OCR0A:
@@ -121,7 +117,7 @@ inline void Initialization (void)
 			  WLAN_Interrupt_Disable, 
 			  Write_WLAN_Pin);
  
-		PORTB |= (1 << PB6);	//Set the WLAN_INIT LED on.
+		PORTC |= (1 << PC6);	//Set the WLAN_INIT LED on.
 		sei();
 
 		//Enable the CC3000, and wait for initialization process to finish.
@@ -256,17 +252,17 @@ void Mux_Select(uint8_t selection)
 	switch (selection)
 	{
 		case ATMEGA_TX:
-			PORTD &= ~(1 << PD4); // Set MUX Select A low to allow Atmega TX line to go through MUX
+			PORTB &= ~(1 << PB7); // Set MUX Select A low to allow Atmega TX line to go through MUX
 			break;
 		case ARM_FTDI_SELECT:
-			PORTD |= (1 << PD4); // Set MUX Select A high to allow FTDI to go through MUX
+			PORTB |= (1 << PB7); // Set MUX Select A high to allow FTDI to go through MUX
 			break;
 	}
 }
 
 /*Set_Mode*/
 /**
-  * @breif 
+  * @brief 
 **/
 uint8_t Set_Mode(uint8_t New_Mode)
 {
@@ -281,20 +277,14 @@ uint8_t Set_Mode(uint8_t New_Mode)
 			case SAFETY_MODE:
 
 				Mux_Select(ATMEGA_TX);	
-
-				/* Need to make this only send to one motor controller
-				   Select_Motor_Controller(1);
-				   USART_Transmit(Kill_Command, 4);
-				   Select_Motor_Controller(2);
-                   USART_Transmit(Kill_Command, 4);
-				*/
-					
+						
+				USART_Transmit (Kill_Command, 4);		// 4 is size of command
 				// Stop the Linear Actuator 01/11
                 // PORTD &= ~(1 << PD7);
                 // PORTD &= ~(1 << PD6);
 
-				//Signal that the unit is in safety mode.
-				PORTC &= ~(1 << PORTC7);
+				PORTE |= (1 << PORTE2);					// Safe Mode LED on
+				_delay_ms(500);
 				Current_Mode = SAFETY_MODE;
 				break;
 
@@ -303,21 +293,23 @@ uint8_t Set_Mode(uint8_t New_Mode)
 				//Do not forward any CC3000 motor controller commands.
 
 				Mux_Select(ARM_FTDI_SELECT);
+				USART_Transmit (Kill_Command, 4);
+				USART_Transmit (Go_Command, 4);
+
+				PORTD |= (1 << PORTD4);					// Autonomous Mode LED on
+				_delay_ms(500);
 				Current_Mode = AUTONOMOUS_MODE;
+				
 				break;
 
 			case RC_MODE:
-				//unsigned char Go_Command[] = "!MG\r";
-                    
+
 				Mux_Select(ATMEGA_TX);
 
-	    		Select_Motor_Controller(1);
+				USART_Transmit (Kill_Command, 4);
 	    		USART_Transmit(Go_Command, 4);
-
-	    		Select_Motor_Controller(2);
-	    		USART_Transmit(Go_Command, 4);				
 				
-				PORTC |= (1 << PORTC7); // Krystian Note- Should check what this does
+				PORTD |= (1 << PORTD6);		// Manual Mode LED on
 				Current_Mode = RC_MODE;
 				break;
 
@@ -393,12 +385,12 @@ void CC3000_Unsynch_Call_Back(long Event_Type, char * Data, unsigned char Length
 			if ( * (Data + NETAPP_IPCONFIG_MAC_OFFSET) == 0)
 			{
 				//DHCP_Complete = 1;
-				PORTC |= (1 << PC6);
+				PORTC |= (1 << PC7);
 			}
 			else
 			{
 				//DHCP_Complete = 0;
-				PORTC &= ~(1 << PC6);
+				PORTC &= ~(1 << PC7);
 			}		
 			break;
 
@@ -418,7 +410,7 @@ void CC3000_Unsynch_Call_Back(long Event_Type, char * Data, unsigned char Length
 
 /*Read_Interrupt_Pin*/
 /**
-  *	@breif This function listens to the interrupt pin, and if it is high, return 1, or low return 0.
+  *	@brief This function listens to the interrupt pin, and if it is high, return 1, or low return 0.
 **/
 long Read_WLAN_Interrupt_Pin()
 {
@@ -430,10 +422,10 @@ void Write_WLAN_Pin(unsigned char val)
 	switch (val)
 	{
 		case 0:
-			PORTB &= ~(1 << PORTB5);
+			PORTD &= ~(1 << PORTD7);		// VBEN
 			break;
 		case 1:
-			PORTB |= (1 << PORTB5);
+			PORTD |= (1 << PORTD7);			// VBEN
 			break;
 	}
 }
@@ -441,14 +433,14 @@ void Write_WLAN_Pin(unsigned char val)
 void WLAN_Interrupt_Enable()
 {
 	//Set the interrupt to occur when the pinout is falling:
-	EICRA = (1 << ISC21);
-	EIMSK |= (1 << INT2);
+	EICRA = (1 << ISC61);
+	EIMSK |= (1 << INT6);
 
 }
 
 void WLAN_Interrupt_Disable()
 {
-	EIMSK &= ~(1 << INT2);
+	EIMSK &= ~(1 << INT6);
 }
 
 uint8_t Recieve_WiFi_Data()
@@ -478,6 +470,7 @@ uint8_t Recieve_WiFi_Data()
 
 	// Check if Temp_Buffer index 0 
 	//Decipher the data transmitted to see if it matches the protocol (if it doesn't ERROR):
+
 	if(Temp_Buffer[0]) 
 		Decrypt_Data(Temp_Buffer[0]); 
 
@@ -492,11 +485,11 @@ void Select_Motor_Controller(uint8_t Motor)
 	{
 		case 0:		//Wheel Controller
 		case 1:		
-			PORTD &= ~(1 << PORTD5);
+			PORTD &= ~(1 << PORTD5);		// Does nothing...
 		break;
 
 		case 2:		//Mechanism & Linear Actuator Controller
-			PORTD |= (1 << PORTD5);
+			PORTD |= (1 << PORTD5);			// Does nothing...
 		break;
 
 		default:	//Invalid intput
@@ -540,50 +533,51 @@ uint8_t Decrypt_Data(unsigned char Data)
 	return 0;
 }
 
-#ifdef TWI_ENABLED
-/*Transmit_Energy_Data*/
-inline void Transmit_Energy_Data()
-{
-	unsigned char Energy_Data [4];
+
+// #ifdef TWI_ENABLED
+// /*Transmit_Energy_Data*/
+// inline void Transmit_Energy_Data()
+// {
+// 	unsigned char Energy_Data [4];
 	
-	//Use TWI to recieve data from energy monitor:
+// 	//Use TWI to recieve data from energy monitor:
 
-	TWI_SEND_START();
-	TWI_WAIT_FOR_START();
-	TWI_CHECK_START();
+// 	TWI_SEND_START();
+// 	TWI_WAIT_FOR_START();
+// 	TWI_CHECK_START();
 	
-	TWI_SEND_SLA_R();
-	TWI_TRANSMIT();
-	TWI_WAIT_FOR_START();
-	TWI_CHECK_RECIEVE();
+// 	TWI_SEND_SLA_R();
+// 	TWI_TRANSMIT();
+// 	TWI_WAIT_FOR_START();
+// 	TWI_CHECK_RECIEVE();
 
-//FOR THIS CASE LET US ASSUME THAT THERE WILL BE NO ERRORS DURRING COMMUNICATION.
-//--------------------------------------------------------------------------------
-	TWI_RECIEVE();
-	TWI_WAIT_FOR_START();
-	Energy_Data[0] = TWDR;
+// //FOR THIS CASE LET US ASSUME THAT THERE WILL BE NO ERRORS DURRING COMMUNICATION.
+// //--------------------------------------------------------------------------------
+// 	TWI_RECIEVE();
+// 	TWI_WAIT_FOR_START();
+// 	Energy_Data[0] = TWDR;
 
-	TWI_CHECK_RECIEVE();
-	TWI_WAIT_FOR_START();
-	Energy_Data[1] = TWDR;
+// 	TWI_CHECK_RECIEVE();
+// 	TWI_WAIT_FOR_START();
+// 	Energy_Data[1] = TWDR;
 
-	TWI_RECIEVE();
-        TWI_WAIT_FOR_START();
-	Energy_Data[2] = TWDR;
+// 	TWI_RECIEVE();
+//         TWI_WAIT_FOR_START();
+// 	Energy_Data[2] = TWDR;
 	
-	TWI_RECIEVE();
-        TWI_WAIT_FOR_START();
-	Energy_Data[3] = TWDR;
-//--------------------------------------------------------------------------------
+// 	TWI_RECIEVE();
+//         TWI_WAIT_FOR_START();
+// 	Energy_Data[3] = TWDR;
+// //--------------------------------------------------------------------------------
 
-	TWI_SEND_STOP();
+// 	TWI_SEND_STOP();
 
-	//Transmit Data from Energy Monitor:
-	sendto(Socket_Handle, Energy_Data, 4, 0, &Mission_Control_Address, (socklen_t)sizeof(Mission_Control_Address));
+// 	//Transmit Data from Energy Monitor:
+// 	sendto(Socket_Handle, Energy_Data, 4, 0, &Mission_Control_Address, (socklen_t)sizeof(Mission_Control_Address));
 	
 			
-}//End Transmit_Energy_Data
-#endif //End TWI_ENABLED
+// }//End Transmit_Energy_Data
+// #endif //End TWI_ENABLED
 
 
 //==========================================================================================================
@@ -594,7 +588,7 @@ inline void Transmit_Energy_Data()
 //Interrupts:
 //***********************************************************************************************************
 
-///NEEDS TO BE REVISED:
+////NEEDS TO BE REVISED:
 //Energy Analysis:
 // #ifdef ENERGY_ANALYSIS_ENABLED
 // 	ISR (TIMER0_COMPA_vect)
@@ -617,7 +611,7 @@ inline void Transmit_Energy_Data()
 //------------------------------------------------------------------------------------------------------
 
 //CC3000 Data Output Request:
-ISR (INT2_vect)
+ISR (INT6_vect)
 {
 	SPI_IRQ();
 	return;
@@ -628,10 +622,10 @@ ISR (INT2_vect)
 //Pseudo_Watchdog_System:
 #ifdef ROUTER_WATCHDOG_ENABLED
 	ISR (TIMER1_COMPA_vect)
-	{	
-///DEBUG:
-PORTC ^= (1 << PORTC7);	
-///
+	{
+		///DEBUG:
+		PORTC ^= (1 << PORTC7);	
+		///
 		++Count;		//Multiply count by five to get the number of seconds that have passed.
-	}//End Timer1_Compare_A Match 
+	}					//End Timer1_Compare_A Match 
 #endif //End ROUTER_WATCHDOG_ENABLED

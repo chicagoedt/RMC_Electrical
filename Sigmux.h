@@ -122,19 +122,19 @@
  *Pin Assignments:
  *
  * CC3000:
- * PE6 (INT.6/AIN0) :				[INPUT]  	{CC3000 IRQ}
- * PB0 (SS)   :						[OUTPUT]  	{CC3000 CS} 
- * PB1 (SCLK) :						[OUTPUT]  	{CC3000 SCK}
- * PB2 (MOSI) :						[OUTPUT]  	{CC3000 MOSI}
- * PB3 (MISO) :						[INPUT]   	{CC3000 MISO}
- * PD7 (T0/OC4D/ADC10) :			[OUTPUT]  	{CC3000 VBEN}
+ * PE6 (INT.6/AIN0) :				[INPUT]  	{CC3000 IRQ}			(old): PD2
+ * PB0 (SS)   :						[OUTPUT]  	{CC3000 CS} 			(old): PB0
+ * PB1 (SCLK) :						[OUTPUT]  	{CC3000 SCK}			(old): PB1
+ * PB2 (MOSI) :						[OUTPUT]  	{CC3000 MOSI}			(old): PB2
+ * PB3 (MISO) :						[INPUT]   	{CC3000 MISO}			(old): PB3
+ * PD7 (T0/OC4D/ADC10) :			[OUTPUT]  	{CC3000 VBEN}			(old): PB5
  *
  * LEDs:
- * PE2 (!HWB) :						[OUTPUT]	{Safe Mode LED}
- * PD4 (ICP1/ADC8) :				[OUTPUT]	{Auto Mode LED}
- * PD6 (T1/!OC4D/ADC9) :			[OUTPUT]	{Manual Mode LED}
- * PC6 (OC3A/!OC4A) :				[OUTPUT]	{CC3000 WLAN_Enabled LED}
- * PC7 (ICP3/CLK0/OC4A) :  			[OUTPUT]  	{CC3000 DHCP Complete LED}
+ * PE2 (!HWB) :						[OUTPUT]	{Safe Mode LED}			(old): PD2
+ * PD4 (ICP1/ADC8) :				[OUTPUT]	{Auto Mode LED}			(old): PD2
+ * PD6 (T1/!OC4D/ADC9) :			[OUTPUT]	{Manual Mode LED}		(old): PD2
+ * PC6 (OC3A/!OC4A) :				[OUTPUT]	{WLAN Enabled LED}		(old): PB6
+ * PC7 (ICP3/CLK0/OC4A) :  			[OUTPUT]  	{DHCP Complete LED}		(old): PC6
  * PB4 () :							[UNUSED]	{TWI Error LED}
  *
  * 
@@ -248,7 +248,7 @@ to I2C). This is used to interface the Sigmux to the energy monitor system and a
 	By default this flag is enabled. To disable the TWI system, replace #define with #undef
 */
 
-#define TWI_ENABLED
+#undef TWI_ENABLED
 
 
 /**
@@ -280,7 +280,7 @@ to I2C). This is used to interface the Sigmux to the energy monitor system and a
 #define SSID_LENGTH						(9)	
 #define CC3000_APP_BUFFER_SIZE			(1)		
 #define CC3000_RX_BUFFER_OVERHEAD_SIZE	(20)
-#define DHCP_Complete					(PORTC & (1 << PC6))	
+#define DHCP_Complete					(PORTC & (1 << PC7))	
 
 #define MAX_COMMAND_SIZE				23  // For example:   @00!G 1 600_@00!G 2 500
 
@@ -355,8 +355,8 @@ to I2C). This is used to interface the Sigmux to the energy monitor system and a
 #define CLEAR(mask, reg) (reg &= ~(mask))
 
 /**
- *	@brief	This function takes in data and transmit it over serial.
- *			Transmit one char at a time, and roboteq wait until it receives a '\r' which signifies the end of the roboteq command
+ *	@brief	This function takes in data and transmits it over serial.
+ *			Transmits one char at a time, and roboteq waits until it receives a '\r' which signifies the end of the roboteq command
  *
  *	@param	_Data	: Array of roboteq data command (i.e !EX\r would be 4 indexed because \r is end line character)
  *			_Index	: Size of data array
