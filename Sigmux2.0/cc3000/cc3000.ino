@@ -32,8 +32,8 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS,
 					 SPI_CLOCK_DIVIDER);
 
 // cannot be longer than 32 characters!
-#define WLAN_SSID       "chicagoedt"        
-#define WLAN_PASS       "notrightnow"
+#define WLAN_SSID       "Team_26"        
+#define WLAN_PASS       "rmcpazzword"
 #define WLAN_SECURITY   WLAN_SEC_WPA2
 
 #define EDT_UDP_SERVICE	5002
