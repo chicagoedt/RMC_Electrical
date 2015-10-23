@@ -118,6 +118,7 @@ inline void Initialization (void)
 			  Write_WLAN_Pin);
  
 		PORTC |= (1 << PC6);	//Set the WLAN_INIT LED on.
+	
 		sei();
 
 		//Enable the CC3000, and wait for initialization process to finish.
@@ -185,6 +186,7 @@ inline void Initialization (void)
 
 			break;
 		}
+
 	#endif
 
 	// NEED TO SETUP A QUICK REMOVAL FLAG FOR THIS CODE TO TEST THE CC3000.
@@ -267,8 +269,8 @@ void Mux_Select(uint8_t selection)
 uint8_t Set_Mode(uint8_t New_Mode)
 {
 
-	unsigned char Kill_Command[] = {'!', 'E', 'X', '\r'};//"!EX\r";
-	unsigned char Go_Command[] = {'!', 'M', 'G', '\r'};//"!MG\r";
+	unsigned char Kill_Command[] = {'!', 'E', 'X', '\r'};	//"!EX\r";
+	unsigned char Go_Command[] = {'!', 'M', 'G', '\r'};		//"!MG\r";
 
 	if (New_Mode != Current_Mode)
 	{
@@ -479,20 +481,20 @@ uint8_t Recieve_WiFi_Data()
 #endif
 
 
-void Select_Motor_Controller(uint8_t Motor)
+void uint8_t(Select_Motor_Controller Motor)
 {
 	switch(Motor)
 	{
-		case 0:		//Wheel Controller
+		case 0:		// Wheel Controller
 		case 1:		
 			PORTD &= ~(1 << PORTD5);		// Does nothing...
 		break;
 
-		case 2:		//Mechanism & Linear Actuator Controller
+		case 2:		// Mechanism & Linear Actuator Controller
 			PORTD |= (1 << PORTD5);			// Does nothing...
 		break;
 
-		default:	//Invalid intput
+		default:	// Invalid intput
 			return;
 		break;
 
@@ -628,4 +630,4 @@ ISR (INT6_vect)
 		///
 		++Count;		//Multiply count by five to get the number of seconds that have passed.
 	}					//End Timer1_Compare_A Match 
-#endif //End ROUTER_WATCHDOG_ENABLED
+#endif

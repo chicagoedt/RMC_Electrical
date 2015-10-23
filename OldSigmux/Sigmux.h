@@ -119,23 +119,22 @@
  *------------------------------------------------------------------------------------------------------*/
 
 /*======================================================================================================
- *Pin Assignments:
+ *Pin Assignments:	NEW SIGMUX LAYOUT!
  *
  * CC3000:
- * PE6 (INT.6/AIN0) :				[INPUT]  	{CC3000 IRQ}			(old): PD2
- * PB0 (SS)   :						[OUTPUT]  	{CC3000 CS} 			(old): PB0
- * PB1 (SCLK) :						[OUTPUT]  	{CC3000 SCK}			(old): PB1
- * PB2 (MOSI) :						[OUTPUT]  	{CC3000 MOSI}			(old): PB2
- * PB3 (MISO) :						[INPUT]   	{CC3000 MISO}			(old): PB3
- * PD7 (T0/OC4D/ADC10) :			[OUTPUT]  	{CC3000 VBEN}			(old): PB5
+ * PE6 (INT.6/AIN0) :				[INPUT]  	{CC3000 IRQ}		(OLD: PE6)	
+ * PB0 (SS)   :						[OUTPUT]  	{CC3000 CS} 		(OLD: PB0)	
+ * PB1 (SCLK) :						[OUTPUT]  	{CC3000 SCK}		(OLD: PB1)		
+ * PB2 (MOSI) :						[OUTPUT]  	{CC3000 MOSI}		(OLD: PB2)		
+ * PB3 (MISO) :						[INPUT]   	{CC3000 MISO}		(OLD: PB3)		
+ * PB4 (PCINT4/ADC11) :				[OUTPUT]  	{CC3000 VBEN}		(OLD: PD7)		
  *
  * LEDs:
- * PE2 (!HWB) :						[OUTPUT]	{Safe Mode LED}			(old): PD2
- * PD4 (ICP1/ADC8) :				[OUTPUT]	{Auto Mode LED}			(old): PD2
- * PD6 (T1/!OC4D/ADC9) :			[OUTPUT]	{Manual Mode LED}		(old): PD2
- * PC6 (OC3A/!OC4A) :				[OUTPUT]	{WLAN Enabled LED}		(old): PB6
- * PC7 (ICP3/CLK0/OC4A) :  			[OUTPUT]  	{DHCP Complete LED}		(old): PC6
- * PB4 () :							[UNUSED]	{TWI Error LED}
+ * PD4 (ICP1/ADC8) :				[OUTPUT]	{Auto Mode LED}		(OLD: PD4)	
+ * PD6 (T1/!OC4D/ADC9) :			[OUTPUT]	{Manual Mode LED}	(OLD: PD6)	
+ * PD7 (T0/OC4D/ADC10) :			[OUTPUT]	{Safe Mode LED}		(OLD: PE2)	
+ * PC7 (ICP3/CLK0/OC4A) :			[OUTPUT]	{WLAN Enabled LED}	(OLD: PC6)	
+ * PE2 (!HWB) :  					[OUTPUT]  	{DHCP Complete LED}	(OLD: PC7)	
  *
  * 
  * PD0 (OC0B/SCL/INT0) :			[UNUSED]	{UNUSED GPIO}
