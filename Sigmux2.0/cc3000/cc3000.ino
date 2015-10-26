@@ -1,10 +1,20 @@
+///////////////////////////////////////////////////////////////
+//
+//  Organization:           UIC Chicago EDT
+//  Engineer(s):            Krystian Gebis      Ammar Subei             Basheer Subei
+//  E-Mail(s):              krgebis@gmail.com   ammarsubei@gmail.com    basheersubei@gmail.com
+// 
+//  Project Title:          cc3000.ino
+//  Micro controller:       Arduino UNO
+// 
+///////////////////////////////////////////////////////////////
+
 #include <Adafruit_CC3000.h>
-#include <ccspi.h>
 #include <SPI.h>
 #include <string.h>
 #include "utility/debug.h"
 
-#define UNO
+#undef UNO
 
 #define	LOG_DATA
 
