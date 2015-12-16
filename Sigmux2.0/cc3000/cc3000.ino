@@ -29,7 +29,7 @@
   #define ADAFRUIT_CC3000_IRQ   7      // MUST be an interrupt pin!
   // These can be any two pins
   #define ADAFRUIT_CC3000_VBAT  6
-  #define ADAFRUIT_CC3000_CS    17     //  http://forum.arduino.cc/index.php?topic=241369.0
+  #define ADAFRUIT_CC3000_CS    10     //  http://forum.arduino.cc/index.php?topic=241369.0
 #endif
 
 
@@ -42,8 +42,8 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS,
 					 SPI_CLOCK_DIVIDER);
 
 // cannot be longer than 32 characters!
-#define WLAN_SSID       "Team_26"        
-#define WLAN_PASS       "rmcpazzword"
+#define WLAN_SSID       "chicagoedt"        
+#define WLAN_PASS       "notrightnow"
 #define WLAN_SECURITY   WLAN_SEC_WPA2
 
 #define EDT_UDP_SERVICE	5002
@@ -51,13 +51,16 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS,
 // Security can be WLAN_SEC_UNSEC, WLAN_SEC_WEP, WLAN_SEC_WPA or WLAN_SEC_WPA2
 
 Adafruit_CC3000_Client udpClient;
-
+/*
+    The following pins were used for the ATmega32u4 microcontroller.
+    They all need to be changed to fit for the new microcontroller (Teensy).
+*/
 #define SERIAL_CONVERT
 #define MUX_TELEOP         0
 #define MUX_AUTONOMOUS     1
 #define PB7            11    // MUX select pin
 #define PD4            4     // Autonomous mode LED
-#define PD6            12    // Manual mode LED
+#define PD6            3    // Manual mode LED
 #define PC6            5     // WLAN LED
 
 #define SAFE_MODE       0
@@ -105,14 +108,16 @@ int lastActuatorVal = 0;
     
 void setup()
 {
+        pinMode(3, OUTPUT);
+        pinMode(4, OUTPUT);
+
 	Serial.begin(115200);
     // Check that cc3000.begin() returns true
 	while (!cc3000.begin())
 	{
 		Serial.println(F("Unable to initialize the CC3000! Check your wiring?"));
 		delay(500);
-	}
-	
+	}	
     // Disable TCP timeout
 	disableIdleTimout();
 	
@@ -135,8 +140,8 @@ void setup()
 	//  optional maximum number of retries (greater than zero) as the fourth parameter.
      
 	// ALSO NOTE: By default connectToAP will retry forever until it can connect to
-	// the access point.  This means if the access point doesn't exist the call
-	// will _never_ return!  You can however put in an optional maximum retry count
+	// the access point. This means if the access point doesn't exist the call
+	// will _never_ return! You can however put in an optional maximum retry count
 	// by passing a 4th parameter to the connectToAP function below.  This should
 	// be a number of retries to make before giving up, for example 5 would retry
 	// 5 times and then fail if a connection couldn't be made.
@@ -179,14 +184,17 @@ void setup()
 	}
 	
     // Attempt connection to UDP
-	uint32_t bindIP = displayConnectionDetails();
-	uint32_t ip = cc3000.IP2U32(192, 168, 1, 192);	// EDT Panel IP
-	udpClient   = cc3000.connectUDP(ip, EDT_UDP_SERVICE, 0);
+ 	// uint32_t bindIP = displayConnectionDetails();
+  displayConnectionDetails();
+	uint32_t ip = cc3000.IP2U32(192, 168, 1, 146);	// EDT Panel IP
+	udpClient   = cc3000.connectUDP(ip, EDT_UDP_SERVICE);
 	
 	if( udpClient.connected() )
           Serial.println(F("UDP Kurwa Connected"));
     else
 		Serial.println(F("UDP Kurwa is dead"));
+              digitalWrite(3, HIGH);
+
 }
 
 void loop()
@@ -204,7 +212,11 @@ void loop()
             // parse command
             Serial.println("attempting to read from udp socket");
             byte command[2];
-            udpClient.read(&command, 2);
+            udpClient.read(&command, 1);
+
+            if( command[0] == 'a') {
+              digitalWrite(4, HIGH);
+            }
 
             uint8_t actuator    = 0;
             uint8_t dig         = 0;
@@ -288,7 +300,7 @@ void loop()
             if(currentMode == MANUAL_MODE)
             {
                 Serial.println("Transmitting CAN command...");
-                USART_Transmit(canCommand, canCommand.length());
+                // USART_Transmit(canCommand, canCommand.length());
             } else {
                 Serial.print("Not transmitting CAN command because we are in mode: ");
                 Serial.println(currentMode);
@@ -302,7 +314,7 @@ void loop()
 uint16_t checkFirmwareVersion(void)
 {
 	uint8_t	 major, minor;
-	uint16_t version;
+	uint16_t version = 0;
   
 #ifndef CC3000_TINY_DRIVER  
 	if(!cc3000.getFirmwareVersion(&major, &minor))
@@ -325,7 +337,10 @@ uint32_t displayConnectionDetails(void)
 	uint32_t ipAddress, netmask, gateway, dhcpserv, dnsserv;
   
 	if(!cc3000.getIPAddress(&ipAddress, &netmask, &gateway, &dhcpserv, &dnsserv))
+ {
 		Reboot("Failed to query IP", 4);
+    return 0;
+ }
 	else
 	{
 		Serial.print(F(  " IP  : ")); cc3000.printIPdotsRev(ipAddress);
@@ -342,9 +357,9 @@ void Reboot(const char* errMsg, uint32_t errCode)
 {
 	Serial.println(errMsg);
 	Serial.println(F("--REBOOTING--"));
-	while(true);
+	//while(true);
 	//cc3000.reboot();
-        for(int x = 0; x < errCode; x++);
+        for(uint32_t x = 0; x < errCode; x++);
         {
           digitalWrite(PC6, HIGH);
           delay(300);
@@ -411,7 +426,8 @@ void disableIdleTimout() {
     }
 }
 
-/* parses commands from CC3000 to control motors
+/* parses commands from CC3000 to control 
+motors
  *
  * Commands come as two bytes (big-endian):
  * _____________________________________       __________________________________________
@@ -450,7 +466,7 @@ void parseCommand(byte* comm, uint8_t* actuator, uint8_t* dig, uint8_t* mode, in
 
     // note: left and right values are signed (2's complement)
     uint16_t LEFT_MASK = 0x00F0 ; // 0b 00000000 11110000
-    uint8_t LEFT_OFFSET = 4;
+    //uint8_t LEFT_OFFSET = 4;
     *left = (int8_t)((command & LEFT_MASK)) / 16;
 
 
@@ -481,7 +497,7 @@ uint8_t ModeSet(uint8_t newMode)
         switch (newMode)
         {
             case SAFE_MODE:
-                USART_Transmit (KILL_COMMAND, 35);
+                // USART_Transmit (KILL_COMMAND, 35);
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_TELEOP);	
                 currentMode = SAFE_MODE;
@@ -491,20 +507,20 @@ uint8_t ModeSet(uint8_t newMode)
             case AUTONOMOUS_MODE:            
                 // Listen to all communications by the computer.
                 // Do not forward any CC3000 motor controller commands.
-                USART_Transmit (KILL_COMMAND, 35);
+                // USART_Transmit (KILL_COMMAND, 35);
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_AUTONOMOUS);
-                USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
+                // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
                 digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
                 delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
                 currentMode = AUTONOMOUS_MODE;
                 break;
 
             case MANUAL_MODE:
-                USART_Transmit (KILL_COMMAND, 35);
+                // USART_Transmit (KILL_COMMAND, 35);
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_TELEOP);
-                USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
+                // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
                 digitalWrite(PD6, HIGH);		// Manual Mode LED on
                 delay(500);
                 currentMode = MANUAL_MODE;
