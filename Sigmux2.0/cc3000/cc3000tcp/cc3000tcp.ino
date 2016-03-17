@@ -1,4 +1,3 @@
-
 ///////////////////////////////////////////////////////////////
 //
 //  Organization:           UIC Chicago EDT
@@ -19,7 +18,7 @@
 
 #undef UNO
 
-#define	LOG_DATA
+#define  LOG_DATA
 
 // These are the interrupt and control pins for the UNO
 #ifdef UNO
@@ -40,20 +39,20 @@
 // On an UNO, SCK = 13, MISO = 12, and MOSI = 11
 
 Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS,
-					 ADAFRUIT_CC3000_IRQ,
-				         ADAFRUIT_CC3000_VBAT,
-					 SPI_CLOCK_DIVIDER);
+           ADAFRUIT_CC3000_IRQ,
+                 ADAFRUIT_CC3000_VBAT,
+           SPI_CLOCK_DIVIDER);
 
 // cannot be longer than 32 characters!
 #define WLAN_SSID       "chicagoedt"        
 #define WLAN_PASS       "notrightnow"
 #define WLAN_SECURITY   WLAN_SEC_WPA2
 
-#define EDT_UDP_SERVICE	5002
+#define EDT_UDP_SERVICE 5002
 
 // Security can be WLAN_SEC_UNSEC, WLAN_SEC_WEP, WLAN_SEC_WPA or WLAN_SEC_WPA2
 
-Adafruit_CC3000_Client udpClient;
+Adafruit_CC3000_Client tcpClient;
 //long sockfd;
 //socklen_t sockLen;
 //sockaddr_in  socketAddr, from;
@@ -72,7 +71,7 @@ Adafruit_CC3000_Client udpClient;
 #define SAFE_MODE       0
 #define AUTONOMOUS_MODE       1
 #define MANUAL_MODE     2
-
+                                                                                                                                                                                                                                                              
 #define SAFE_DELAY 1000      // delay in ms every time we switch to/from SAFE_MODE
 
 #ifdef SERIAL_CONVERT
@@ -116,26 +115,27 @@ void setup()
 {
         pinMode(3, OUTPUT);
         pinMode(4, OUTPUT);
+        pinMode(5, OUTPUT);
       
         //memset(&socketAddr, 0, sizeof(sockaddr_in));
       
-      	Serial.begin(115200);
+        Serial.begin(115200);
           // Check that cc3000.begin() returns true
-      	while (!cc3000.begin())
-      	{
-      		Serial.println(F("Unable to initialize the CC3000! Check your wiring?"));
-      		delay(500);
-      	}	
+        while (!cc3000.begin())
+        {
+          Serial.println(F("Unable to initialize the CC3000! Check your wiring?"));
+          delay(500);
+        } 
           // Disable TCP timeout
-      	disableIdleTimout();
-      	
+        disableIdleTimout();
+        
           // Check Firmware version
-      	uint16_t firmware = checkFirmwareVersion();
-      	if (firmware < 0x113)
-      	{
-      		Serial.println(F("Wrong firmware version!"));
-      		while(1);
-      	}
+        uint16_t firmware = checkFirmwareVersion();
+        if (firmware < 0x113)
+        {
+          Serial.println(F("Wrong firmware version!"));
+          while(1);
+        }
       
         //memset(&socketAddr, 0, sizeof(sockaddr_in));
         
@@ -145,65 +145,66 @@ void setup()
         
           // Attempt connection to AP
       
-      	// NOTE: Secure connections are not available in 'Tiny' mode!
-      	// By default connectToAP will retry indefinitely, however you can pass an
-      	//  optional maximum number of retries (greater than zero) as the fourth parameter.
+        // NOTE: Secure connections are not available in 'Tiny' mode!
+        // By default connectToAP will retry indefinitely, however you can pass an
+        //  optional maximum number of retries (greater than zero) as the fourth parameter.
            
-      	// ALSO NOTE: By default connectToAP will retry forever until it can connect to
-      	// the access point. This means if the access point doesn't exist the call
-      	// will _never_ return! You can however put in an optional maximum retry count
-      	// by passing a 4th parameter to the connectToAP function below.  This should
-      	// be a number of retries to make before giving up, for example 5 would retry
-      	// 5 times and then fail if a connection couldn't be made.
+        // ALSO NOTE: By default connectToAP will retry forever until it can connect to
+        // the access point. This means if the access point doesn't exist the call
+        // will _never_ return! You can however put in an optional maximum retry count
+        // by passing a 4th parameter to the connectToAP function below.  This should
+        // be a number of retries to make before giving up, for example 5 would retry
+        // 5 times and then fail if a connection couldn't be made.
       
-      	Serial.print(F("Connecting to AP - "));
+        Serial.print(F("Connecting to AP - "));
               
               //wlan_disconnect();
-      	
+        
           if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY))
-      	{
-      		Reboot("Connecting to AP - Failed", 1);
-      		return;
-      	}
+        {
+          Reboot("Connecting to AP - Failed", 1);
+          return;
+        }
          
-      	Serial.println(F("OK"));
+        Serial.println(F("OK"));
         
           // Check for DHCP and timeout after 20 seconds
-          unsigned long dhcpTimeout = 20000;	// Try for 20 sec
-      	unsigned long retry       = 0;
+          unsigned long dhcpTimeout = 20000;  // Try for 20 sec
+        unsigned long retry       = 0;
          
-      	for(unsigned long t = millis(); ((millis() - t) <= dhcpTimeout);)
-      	{
-      		Serial.print(F("Querying DHCP - "));
-      		
-      		if(cc3000.checkDHCP())
-      		{
-      			Serial.println(F("OK"));
-      			break;
-      		}
-      		else
-      		{
-      			if(retry >= 10)
-      				Reboot("FAILED - Rebooting!!!", 2);
-      			
-      			Serial.println(retry+1);
-      		}
-      		
-      		++retry;
-      		delay(1000);
-      	}
-      	
+        for(unsigned long t = millis(); ((millis() - t) <= dhcpTimeout);)
+        {
+          Serial.print(F("Querying DHCP - "));
+          
+          if(cc3000.checkDHCP())
+          {
+            Serial.println(F("OK"));
+            break;
+          }
+          else
+          {
+            if(retry >= 10)
+              Reboot("FAILED - Rebooting!!!", 2);
+            
+            Serial.println(retry+1);
+          }
+          
+          ++retry;
+          
+          delay(1000);
+        }
+        
           // Attempt connection to UDP
-       	// uint32_t bindIP = displayConnectionDetails();
+        // uint32_t bindIP = displayConnectionDetails();
         displayConnectionDetails();
-      	uint32_t ip = cc3000.IP2U32(192, 168, 1, 205);	// My IP from DHCP
-      	udpClient   = cc3000.connectUDP(ip, EDT_UDP_SERVICE);
-      	
-      	if( udpClient.connected() )
-                Serial.println(F("UDP Kurwa Connected"));
+        uint32_t ip = cc3000.IP2U32(192, 168, 1, 205);  // My IP from DHCP
+        tcpClient   = cc3000.connectTCP(ip, EDT_UDP_SERVICE);
+        Serial.println("I'm right before 'connected'");
+        if( tcpClient.connected() )
+                Serial.println(F("TCP Kurwa Connected"));
         else
         {
-      		      Serial.println(F("UDP Kurwa is dead"));
+                Serial.println(F("TCP Kurwa is dead"));
                 digitalWrite(3, HIGH);
         }
       
@@ -213,19 +214,19 @@ void setup()
 void loop()
 {
     // Serial.println("entered main loop...");
-		if(!udpClient.connected())
+    if(!tcpClient.connected())
     {
-			      Reboot("Lost connection in main loop", 10);
-            Serial.println("Lost udp connection!");
+            Reboot("Lost connection in main loop", 10);
+            Serial.println("Lost TCP connection!");
     }
-		
-		if(udpClient.available())
-		{
+    
+    if(tcpClient.available())
+    {
   
             // parse command
-            Serial.println("attempting to read from udp socket");
+            Serial.println("attempting to read from TCP socket");
             byte command[2];
-            udpClient.read(&command, 1);
+            tcpClient.read(&command, 1);
 
             if( command[0] == 'a') {
               digitalWrite(4, HIGH);
@@ -321,57 +322,57 @@ void loop()
             
         }
 
-		delay(100);
+    delay(100);
 }
 
 uint16_t checkFirmwareVersion(void)
 {
-	uint8_t	 major, minor;
-	uint16_t version = 0;
+  uint8_t  major, minor;
+  uint16_t version = 0;
   
 #ifndef CC3000_TINY_DRIVER  
-	if(!cc3000.getFirmwareVersion(&major, &minor))
-		Reboot("Unable to retrieve the firmware version", 3);
-	else
-	{
-		Serial.print(F("Firmware : "));
-		Serial.print(major);
-		Serial.print(F("."));
-		Serial.println(minor);
-		
-		version = major; version <<= 8; version |= minor;
-	}
+  if(!cc3000.getFirmwareVersion(&major, &minor))
+    Reboot("Unable to retrieve the firmware version", 3);
+  else
+  {
+    Serial.print(F("Firmware : "));
+    Serial.print(major);
+    Serial.print(F("."));
+    Serial.println(minor);
+    
+    version = major; version <<= 8; version |= minor;
+  }
 #endif
-	return version;
+  return version;
 }
 
 uint32_t displayConnectionDetails(void)
 {
-	uint32_t ipAddress, netmask, gateway, dhcpserv, dnsserv;
+  uint32_t ipAddress, netmask, gateway, dhcpserv, dnsserv;
   
-	if(!cc3000.getIPAddress(&ipAddress, &netmask, &gateway, &dhcpserv, &dnsserv))
+  if(!cc3000.getIPAddress(&ipAddress, &netmask, &gateway, &dhcpserv, &dnsserv))
  {
-		Reboot("Failed to query IP", 4);
+    Reboot("Failed to query IP", 4);
     return 0;
  }
-	else
-	{
-		Serial.print(F(  " IP  : ")); cc3000.printIPdotsRev(ipAddress);
-		Serial.print(F("\n Mask: ")); cc3000.printIPdotsRev(netmask);
-		Serial.print(F("\n GW  : ")); cc3000.printIPdotsRev(gateway);
-		Serial.print(F("\n DHCP: ")); cc3000.printIPdotsRev(dhcpserv);
-		Serial.print(F("\n DNS : ")); cc3000.printIPdotsRev(dnsserv);
-		Serial.println();
-		return ipAddress;
-	}
+  else
+  {
+    Serial.print(F(  " IP  : ")); cc3000.printIPdotsRev(ipAddress);
+    Serial.print(F("\n Mask: ")); cc3000.printIPdotsRev(netmask);
+    Serial.print(F("\n GW  : ")); cc3000.printIPdotsRev(gateway);
+    Serial.print(F("\n DHCP: ")); cc3000.printIPdotsRev(dhcpserv);
+    Serial.print(F("\n DNS : ")); cc3000.printIPdotsRev(dnsserv);
+    Serial.println();
+    return ipAddress;
+  }
 }
 
 void Reboot(const char* errMsg, uint32_t errCode)
 {
-	Serial.println(errMsg);
-	Serial.println(F("--REBOOTING--"));
-	//while(true);
-	//cc3000.reboot();
+  Serial.println(errMsg);
+  Serial.println(F("--REBOOTING--"));
+  //while(true);
+  //cc3000.reboot();
         for(uint32_t x = 0; x < errCode; x++);
         {
           digitalWrite(PC6, HIGH);
@@ -384,30 +385,30 @@ void Reboot(const char* errMsg, uint32_t errCode)
 void displayDriverMode(void)
 {
 #ifdef CC3000_TINY_DRIVER
-	Serial.println(F("CC3000 is configured in 'Tiny' mode"));
+  Serial.println(F("CC3000 is configured in 'Tiny' mode"));
 #else
-	Serial.print(F("RX Buffer : "));
-	Serial.print(CC3000_RX_BUFFER_SIZE);
-	Serial.println(F(" bytes"));
-	Serial.print(F("TX Buffer : "));
-	Serial.print(CC3000_TX_BUFFER_SIZE);
-	Serial.println(F(" bytes"));
+  Serial.print(F("RX Buffer : "));
+  Serial.print(CC3000_RX_BUFFER_SIZE);
+  Serial.println(F(" bytes"));
+  Serial.print(F("TX Buffer : "));
+  Serial.print(CC3000_TX_BUFFER_SIZE);
+  Serial.println(F(" bytes"));
 #endif
 }
 
 void displayMACAddress(void)
 {
-	uint8_t macAddress[6];
-	
-	if(!cc3000.getMacAddress(macAddress))
-	{
-		Serial.println(F("Unable to retrieve MAC Address!"));
-	}
-	else
-	{
-		Serial.print(F("MAC Address : "));
-		cc3000.printHex((byte*)&macAddress, 6);
-	}
+  uint8_t macAddress[6];
+  
+  if(!cc3000.getMacAddress(macAddress))
+  {
+    Serial.println(F("Unable to retrieve MAC Address!"));
+  }
+  else
+  {
+    Serial.print(F("MAC Address : "));
+    cc3000.printHex((byte*)&macAddress, 6);
+  }
 }
 
 void disableIdleTimout() {
@@ -512,7 +513,7 @@ uint8_t ModeSet(uint8_t newMode)
             case SAFE_MODE:
                 // USART_Transmit (KILL_COMMAND, 35);
                 delay(SAFE_DELAY);
-                MuxSelect(MUX_TELEOP);	
+                MuxSelect(MUX_TELEOP);  
                 currentMode = SAFE_MODE;
                 delay(500);
                 break;
@@ -524,7 +525,7 @@ uint8_t ModeSet(uint8_t newMode)
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_AUTONOMOUS);
                 // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
-                digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
+                digitalWrite(PD4, HIGH);              // Autonomous Mode LED on
                 delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
                 currentMode = AUTONOMOUS_MODE;
                 break;
@@ -534,7 +535,7 @@ uint8_t ModeSet(uint8_t newMode)
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_TELEOP);
                 // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
-                digitalWrite(PD6, HIGH);		// Manual Mode LED on
+                digitalWrite(PD6, HIGH);    // Manual Mode LED on
                 delay(500);
                 currentMode = MANUAL_MODE;
                 break;
