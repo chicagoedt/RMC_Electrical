@@ -111,6 +111,7 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ
 static volatile uint8_t currentMode;
 
 int lastActuatorVal = 0;
+int CANFlag = 0;
 // constants multiplied by value from panel udp socket
 #define LEFT_WHEEL_CONSTANT 100
 #define RIGHT_WHEEL_CONSTANT 100
@@ -281,7 +282,7 @@ void echoLoop() {
     // CC3000 library's internal buffer.
     while (i->client.available() > 0) {
 
-      Serial.println("attempting to read from udp socket");
+      //Serial.println("attempting to read from TCP socket");
             byte command[2];
             i->client.read(&command, 2);
 
@@ -299,7 +300,7 @@ void echoLoop() {
             currentMode = mode;  // workaround because currentMode is volatile
             
             // for debugging
-            Serial.print("command bytes received: "); 
+            //Serial.print("command bytes received: "); 
             cc3000.printHexChar(command, 2);
 //            Serial.print(command[0], BIN); Serial.print(command[1], BIN); Serial.println();
 //            Serial.print("actuator: "); Serial.println(actuator);
@@ -350,9 +351,11 @@ void echoLoop() {
               lastActuatorVal = actuatorVal;  // update last actuator value
               
               // append digVal to canCommand
-              canCommand += "@05!G 1 ";
-              canCommand += digVal;
-              canCommand += "\r";
+              if(dig > -0.8){
+                canCommand += "@05!G 1 ";
+                canCommand += digVal;
+                canCommand += "\r";
+              }
 
             
             // switch modes, check if we fail
@@ -363,16 +366,20 @@ void echoLoop() {
             }
 
             
-            Serial.print("CAN command is: ");
+            //Serial.print("CAN command is: ");
             Serial.println(canCommand); //Send TX here
             
             // TODO if manual mode,
             // construct RoboteQ commands and transmit over USART
             if(currentMode == MANUAL_MODE)
             {
-                Serial.println("Transmitting CAN command...");
+                if(CANFlag == 0){
+                  Serial.println("Transmitting CAN command...");
+                  CANFlag++;
+                }
                 // USART_Transmit(canCommand, canCommand.length());
             } else {
+                CANFlag--;
                 Serial.print("Not transmitting CAN command because we are in mode: ");
                 Serial.println(currentMode);
             }
