@@ -372,11 +372,27 @@ void echoLoop() {
             // TODO if manual mode,
             // construct RoboteQ commands and transmit over USART
             if(currentMode == MANUAL_MODE)
-            {
+            {       
                 if(CANFlag == 0){
                   Serial.println("Transmitting CAN command...");
                   CANFlag++;
                 }
+                canCommand = "!G 1 ";
+                canCommand += leftMotorVal;
+                canCommand += "\r";
+                
+                Serial1.write(canCommand.c_str());
+
+                //FOR ROBOTEQ DEBUGGING 
+                /*
+                while(Serial1.available() > 0)
+                {
+                  Serial.println("reading from roboteq");
+                  char ch1 = Serial1.read();
+                  Serial.print(ch1);
+                }
+                */
+                  
                 // USART_Transmit(canCommand, canCommand.length());
             } else {
                 CANFlag--;
@@ -431,6 +447,7 @@ void setup(void)
   pinMode(5, OUTPUT);
   
   Serial.begin(115200);
+  Serial1.begin(115200);
   Serial.println(F("Hello, CC3000!\n")); 
 
   Serial.print("Free RAM: "); Serial.println(getFreeRam(), DEC);
