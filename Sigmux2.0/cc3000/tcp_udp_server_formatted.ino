@@ -1,16 +1,4 @@
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
-//  Organization:           UIC Chicago EDT
-//  Engineer(s):            Krystian Gebis      Ammar Subei             Basheer Subei             Oliver Panasewicz
-//  E-Mail(s):              krgebis@gmail.com   ammarsubei@gmail.com    basheersubei@gmail.com    opanasewicz@gmail.com
-// 
-//  Project Title:          cc3000.ino
-//  Micro controller:       Arduino UNO
-// 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#include <Adafruit_CC3000.h>
+nclude <Adafruit_CC3000.h>
 #include <SPI.h>
 #include "utility/debug.h"
 #include "utility/socket.h"
@@ -41,19 +29,16 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ
 #define SERIAL_CONVERT
 #define MUX_TELEOP         0
 #define MUX_AUTONOMOUS     1
-#define MANUAL_LED         4     // Manual mode LED
-#define AUTO_LED           3     // Autonomous mode LED
-#define SAFE_LED           2     // Safe mode LED
-#define WIFI_LED           18    // Wifi LED
-#define DATA_LED           19    // Data LED
-#define CTRL               15    // MUX Select Pin
-#define SAFE_MODE          0
-#define AUTONOMOUS_MODE    1
-#define MANUAL_MODE        2
+#define PB7            11    // MUX select pin
+#define PD6            3     // Manual mode LED
+#define PD4            4     // Autonomous mode LED
+#define PC6            5     // WLAN LED
+
+#define SAFE_MODE       0
+#define AUTONOMOUS_MODE       1
+#define MANUAL_MODE     2
 
 #define SAFE_DELAY 1000      // delay in ms every time we switch to/from SAFE_MODE
-
-byte lastCommand[2];
 
 static volatile uint8_t currentMode;
 
@@ -84,7 +69,7 @@ int CANFlag = 0;
     
 
 int loopCount = 0;
-int cMode_LED; //current mode LED 
+
 
 // Define a simple forward linked list structure to keep track of 
 // connected clients.  This client list is kept as a linked list 
@@ -164,9 +149,6 @@ void removeClient(struct ClientList* client) {
   client = NULL;
   // Decrement the count of connected clients.
   clientCount--;
-
-  Serial.print("Client Removed ");
-  Serial.println(clientCount);
 }
 
 // Set up the echo server and start listening for connections.  Should be called once
@@ -250,203 +232,161 @@ void echoSetup() {
   Serial.println(F("Listening for connections..."));
 }
 
-
-void processBuffer(ClientList* j)
-{
-    uint8_t actuator    = 0;
-    uint8_t dig         = 0;
-    int8_t left        =  0;
-    int8_t right       =  0;
-    
-    uint8_t mode = currentMode;
-    parseCommand(lastCommand, &actuator, &dig, &mode, &left, &right);
-    if(mode != currentMode)
-    {
-      ModeSet(mode);
-    }   
-    
-    // for debugging
-    // Serial.print("command bytes: "); 
-    //OP cc3000.printHexChar(lastCommand, 2);
-    //            Serial.print(lastCommand[0], BIN); Serial.print(lastCommand[1], BIN); Serial.println();
-    //            Serial.print("actuator: "); Serial.println(actuator);
-    //            Serial.print("dig: "); Serial.println(dig);
-    //            Serial.print("mode: "); Serial.println(currentMode);
-    //            Serial.print("left: "); Serial.println(left);
-    //            Serial.print("right: "); Serial.println(right);
-    
-    String canCommand; // Start string off with "@0" 
-    int leftMotorVal = left * LEFT_WHEEL_CONSTANT;
-    int rightMotorVal = right * RIGHT_WHEEL_CONSTANT;
-    int actuatorVal = actuator * ACTUATOR_CONSTANT;
-    int digVal = dig * DIG_CONSTANT;
-    
-    // append motor value to canCommand if not zero
-    if ( leftMotorVal != 0 || rightMotorVal != 0)
-    { 
-      /*
-      for (int i = 1; i <= 3; i++)
-      {
-          if ( i != 1)
-             canCommand += "_";
-      */
-      
-          //Serial.println(i);
-          canCommand += "@01";
-          //canCommand += "1";
-          canCommand += "!G 1 ";
-          
-          canCommand += leftMotorVal;
-          canCommand += "_@01";
-          //canCommand += "1";
-          canCommand += "!G 2 ";
-          canCommand += rightMotorVal;
-          canCommand += "\r";
-         
-      //}
-    }
-    
-    // append actuatorVal to canCommand if last one has changed (no watchdog for actuators)
-    if( actuatorVal != lastActuatorVal)
-    {
-         canCommand += "@04!G 1 ";
-         canCommand += actuatorVal;
-         canCommand += "_@04!G 2 ";
-         canCommand += actuatorVal;
-         canCommand += "\r"; 
-    }
-    
-    lastActuatorVal = actuatorVal;  // update last actuator value
-    
-    // append digVal to canCommand
-    if(dig == 1)
-    {
-        canCommand += "@05!G 1 ";
-        canCommand += digVal;
-        canCommand += "\r";
-    }
-    
-    // switch modes, check if we fail
-    /*
-    if(!ModeSet(currentMode))
-    {
-      // TODO PRINT OUT ERROR
-      Serial.print("Cannot change mode to "); Serial.println(currentMode);
-    }
-    */
-    
-    // TODO if manual mode,
-    // construct RoboteQ commands and transmit over USART
-    if(currentMode == MANUAL_MODE)
-    {       
-      if(CANFlag == 0)
-      {
-         Serial.print("Transmitting CAN command from socket ");
-         Serial.println(j->socket);
-        CANFlag++;
-      }
-      
-      //canCommand = "!G 1 ";
-      //canCommand += leftMotorVal;
-      //canCommand += "\r";
-
-      if(canCommand != "")
-      {
-        //canCommand = "@01!G 1 200\r";
-        Serial.print("CAN: ");
-        Serial.println(canCommand); //Send TX here
-        Serial1.write(canCommand.c_str());
-      }
-      
-      //FOR ROBOTEQ DEBUGGING 
-
-      /*
-      while(Serial1.available() > 0)
-      {
-        Serial.println("reading from roboteq");
-        char ch1 = Serial1.read();
-        Serial.print(ch1);
-      }
-      */
-      // USART_Transmit(canCommand, canCommand.length());
-    } 
-    else 
-    {
-        CANFlag--;
-        //OP Serial.print("Not transmitting CAN command because we are in mode: ");
-        //OP Serial.println(currentMode);
-    }
-}
-
-int  msgCount = 0;
 // Update the state of clients, and accept new client connections.  Should be called
 // by the Arduino sketch's loop function.
-void loop(void) 
-{  
-    // Iterate through all the connected clients.
-    ClientList* i = clients;
-    
-    while (i != NULL) 
-    {
-        // Save the next client so the current one can be removed when it disconnects
-        // without breaking iteration through the clients.
-        //ClientList* next = i->next;
-        // If there's data available, read it a character at a time from the
-        // CC3000 library's internal buffer.
-        if (i->client.available() > 0) 
-        {
+void echoLoop() {  
+  // Iterate through all the connected clients.
+  ClientList* i = clients;
+  
+  while (i != NULL) {
+    // Save the next client so the current one can be removed when it disconnects
+    // without breaking iteration through the clients.
+    //ClientList* next = i->next;
+    // If there's data available, read it a character at a time from the
+    // CC3000 library's internal buffer.
+    if (i->client.available() > 0) {
+
+      //Serial.println("attempting to read from TCP socket");
             byte command[2];
-            
-            if( i->client.read(&command, 2) <= 0)
-            {
-              removeClient(i);
-              return;
+            i->client.read(&command, 2);
+
+            if( command[0] == 'a') {
+              digitalWrite(4, HIGH);
             }
 
-          
-
-            msgCount++;
-            //Serial.print("Msg from socket ");
-            //Serial.print(i->socket);
-            //Serial.println(msgCount);
+            uint8_t actuator    = 0;
+            uint8_t dig         = 0;
+            int8_t left        =  0;
+            int8_t right       =  0;
             
-            lastCommand[0] = command[0];
-            lastCommand[1] = command[1];
-        
-        }
-        processBuffer(i);
-       if(Serial2.available() > 0)
-       {
+            uint8_t mode = currentMode;
+            parseCommand(command, &actuator, &dig, &mode, &left, &right);
+            currentMode = mode;  // workaround because currentMode is volatile
+            
+              // for debugging
+              // Serial.print("command bytes received: "); 
+              cc3000.printHexChar(command, 2);
+//            Serial.print(command[0], BIN); Serial.print(command[1], BIN); Serial.println();
+//            Serial.print("actuator: "); Serial.println(actuator);
+//            Serial.print("dig: "); Serial.println(dig);
+//            Serial.print("mode: "); Serial.println(currentMode);
+//            Serial.print("left: "); Serial.println(left);
+//            Serial.print("right: "); Serial.println(right);
 
-          //char oMsg[2];
-          //char incomingByte1, incomingByte2;
-       
-          char oMsg = Serial2.read();
-          //Serial.print("Sent message: ");
-          //Serial.println(oMsg, HEX);
-          //incomingByte2 = Serial2.read();
-          
-          //oMsg[0] = incomingByte1;
-          //oMsg[1] = incomingByte2;
+               String canCommand; // Start string off with "@0" 
+               int leftMotorVal = left * LEFT_WHEEL_CONSTANT;
+               int rightMotorVal = right * RIGHT_WHEEL_CONSTANT;
+               int actuatorVal = actuator * ACTUATOR_CONSTANT;
+               int digVal = dig * DIG_CONSTANT;
+              
+              
+              // append motor value to canCommand if not zero
+              if ( leftMotorVal != 0 || rightMotorVal != 0)
+              { 
+                for (int i = 1; i <= 3; i++)
+                {
+                    if ( i != 1)
+                    {
+                       canCommand += "_";
+                    }
+                    //Serial.println(i);
+                    canCommand += "@0";
+                    canCommand += i;
+                    canCommand += "!G 1 ";
+                    
+                    canCommand += leftMotorVal;
+                    canCommand += "_@0";
+                    canCommand += i;
+                    canCommand += "!G 2 ";
+                    canCommand += rightMotorVal;
+                   
+                }
+                  
+              }
+              
+              // append actuatorVal to canCommand if last one has changed (no watchdog for actuators)
+              if( actuatorVal != lastActuatorVal)
+              {
+                 canCommand += "@04!G 1 ";
+                 canCommand += actuatorVal;
+                 canCommand += "_@04!G 2 ";
+                 canCommand += actuatorVal; 
+              }
+              lastActuatorVal = actuatorVal;  // update last actuator value
+              
+              // append digVal to canCommand
+              if(dig > -0.8){
+                canCommand += "@05!G 1 ";
+                canCommand += digVal;
+                canCommand += "\r";
+              }
 
-          
-          if(send(i->socket, &oMsg, 1, 0) < 1)
-          {
-            Serial.println("Message failed to send on socket");
-          }
-          else
-          {
-            Serial.print("Sent message: ");
-            Serial.println(oMsg);
-            //Serial.print(" ");
-            //Serial.println(oMsg[1]);
-          }
-          
-        }
-         i =  i->next;
+            
+            // switch modes, check if we fail
+            if(!ModeSet(currentMode))
+            {
+                // TODO PRINT OUT ERROR
+                Serial.print("Cannot change mode to "); Serial.println(currentMode);
+            }
+
+            
+            //Serial.print("CAN command is: ");
+            Serial.println(canCommand); //Send TX here
+            
+            // TODO if manual mode,
+            // construct RoboteQ commands and transmit over USART
+            if(currentMode == MANUAL_MODE)
+            {       
+                //if(CANFlag == 0){
+                  Serial.print("Transmitting CAN command from socket ");
+                  Serial.println(i->socket);
+                  //CANFlag++;
+                //}
+                canCommand = "!G 1 ";
+                canCommand += leftMotorVal;
+                canCommand += "\r";
+                
+                Serial1.write(canCommand.c_str());
+
+                //FOR ROBOTEQ DEBUGGING 
+                /*
+                while(Serial1.available() > 0)
+                {
+                  Serial.println("reading from roboteq");
+                  char ch1 = Serial1.read();
+                  Serial.print(ch1);
+                }
+                */
+                  
+                // USART_Transmit(canCommand, canCommand.length());
+            } else {
+                CANFlag--;
+                Serial.print("Not transmitting CAN command because we are in mode: ");
+                Serial.println(currentMode);
+            }
       
+      //uint8_t ch = i->client.read();
+      // Echo the read byte back out to the client immediately.
+      //Serial.println(ch);
+      /*
+      if (i->client.write(ch) == 0) {
+        Serial.println(F("Error writing character to client!"));
+      }
+      */
     }
-
+    // Check if the client is disconnected and remove it from the active client list. DOES NOT WORK
+    // COMMENT OUT until removal is fixed
+    /*if (!i->client.connected()) {
+      Serial.print(F("Client on socket "));
+      Serial.print(i->socket);
+      Serial.println(F(" disconnected."));
+      removeClient(i);
+      // Note that i is now NULL!  Don't try to dereference it or you will
+      // have a bad day (your Arduino will reset).
+    }*/
+    // Continue iterating through clients.
+     i =  i->next;
+  }// end of while (clients)
   
   // Handle new client connections if we aren't at the limit of connected clients.
   if (clientCount < MAX_CLIENTS) {
@@ -481,31 +421,17 @@ void loop(void)
       }
     }
   }
-
-  delay(100);  // 1000 / UI UPS
 }
 
 void setup(void)
 {
-  pinMode(SAFE_LED, OUTPUT);
-  pinMode(AUTO_LED, OUTPUT);
-  pinMode(MANUAL_LED, OUTPUT);
-  pinMode(WIFI_LED, OUTPUT);
-  digitalWrite(WIFI_LED, LOW);
-  pinMode(DATA_LED, OUTPUT);
-  pinMode(CTRL, OUTPUT);
-
-  lastCommand[0] = lastCommand[0] | 0x01;
-
-  cMode_LED = AUTO_LED;
-  ModeSet(AUTONOMOUS_MODE);
-  //digitalWrite(CTRL, HIGH);
-  udpExists = 1;
+  pinMode(3, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(5, OUTPUT);
+  udpExists = 0;
   
   Serial.begin(115200);
   Serial1.begin(115200);
-  Serial2.begin(115200);
-  
   Serial.println(F("Hello, CC3000!\n")); 
 
   Serial.print("Free RAM: "); Serial.println(getFreeRam(), DEC);
@@ -517,7 +443,6 @@ void setup(void)
     Serial.println(F("Couldn't begin()! Check your wiring?"));
     delay(500);
   }
-
 /*
   // Check Firmware version
   uint16_t firmware = checkFirmwareVersion();
@@ -532,31 +457,35 @@ void setup(void)
   //displayDriverMode();
   //displayMACAddress();
 
-  Serial.print("Connecting to AP - ");
+  Serial.print(F("Connecting to AP - "));
   
   if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY)) {
-    Serial.println("Failed!");
+    Serial.println(F("Failed!"));
     while(1);
   }
    
-  Serial.println("Connected!");
+  Serial.println(F("Connected!"));
   
-  // Check for DHCP and timeout after 20 seconds
-  unsigned long dhcpTimeout = 20000;  // Try for 20 sec
+// Check for DHCP and timeout after 20 seconds
+    unsigned long dhcpTimeout = 20000;  // Try for 20 sec
   unsigned long retry       = 0;
    
   for(unsigned long t = millis(); ((millis() - t) <= dhcpTimeout);)
   {
-    Serial.print("Querying DHCP - ");
+    Serial.print(F("Querying DHCP - "));
     
     if(cc3000.checkDHCP())
     {
       Serial.println(F("OK"));
-      digitalWrite(WIFI_LED, HIGH);
       break;
     }
     else
+    {
+      if(retry >= 10)
+        //Reboot("FAILED - Rebooting!!!", 2);
+      
       Serial.println(retry+1);
+    }
     
     ++retry;
     delay(1000);
@@ -568,6 +497,26 @@ void setup(void)
   
   // Initialize the echo server
   echoSetup();
+}
+
+void loop(void)
+{
+  echoLoop();
+  /*
+  // Update the echo server.
+  if(loopCount < 70)
+  {
+    echoLoop();
+    delay(500);
+    Serial.println(loopCount);
+    loopCount++;
+  }
+  else
+  {
+    closesocket(listenSocket);
+  }
+  */
+
 }
 
 /**************************************************************************/
@@ -605,9 +554,9 @@ void Reboot(const char* errMsg, uint32_t errCode)
   //cc3000.reboot();
         for(uint32_t x = 0; x < errCode; x++);
         {
-          digitalWrite(WIFI_LED, HIGH);
+          digitalWrite(PC6, HIGH);
           delay(300);
-          digitalWrite(WIFI_LED, LOW);
+          digitalWrite(PC6, LOW);
           delay(300);
         }
 }
@@ -724,12 +673,10 @@ void MuxSelect(uint8_t selection)
   switch (selection)
   {
     case MUX_TELEOP:
-        digitalWrite(CTRL, LOW);     //Set MUX Select low to allow Atmega TX line to go through MUX
-        Serial.println("Mux set to low");
+        digitalWrite(PB7, LOW);     //Set MUX Select low to allow Atmega TX line to go through MUX
         break;
     case MUX_AUTONOMOUS:
-        digitalWrite(CTRL, HIGH);    // Set MUX Select high to allow FTDI to go through MUX
-        Serial.println("Mux set to high");
+        digitalWrite(PB7, HIGH);    // Set MUX Select high to allow FTDI to go through MUX
         break;
   }
 }
@@ -737,44 +684,18 @@ void MuxSelect(uint8_t selection)
 uint8_t ModeSet(uint8_t newMode)
 {
 
-    Serial.print("Mode change request is: "); Serial.println(newMode);
-    Serial.print("Current mode is: "); Serial.println(currentMode);
     // don't do anything if we're in same mode
     if (newMode != currentMode)
     {
         switch (newMode)
         {
             case SAFE_MODE:
-                //DEFAULTING SAFE TO AUTO MODE
-                
                 // USART_Transmit (KILL_COMMAND, 35);
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_TELEOP);  
                 currentMode = SAFE_MODE;
-                digitalWrite(cMode_LED, LOW);
-                digitalWrite(SAFE_LED, HIGH);    // Manual Mode LED on
-                cMode_LED = SAFE_LED;
-                //digitalWrite(CTRL, LOW);
                 delay(500);
-                Serial.println("Now in Safe Mode");
                 break;
-                
-                /*
-                // Listen to all communications by the computer.
-                // Do not forward any CC3000 motor controller commands.
-                // USART_Transmit (KILL_COMMAND, 35);
-                delay(SAFE_DELAY);
-                MuxSelect(MUX_AUTONOMOUS);
-                // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
-                digitalWrite(cMode_LED, LOW);
-                digitalWrite(AUTO_LED, HIGH);              // Autonomous Mode LED on
-                cMode_LED = AUTO_LED;
-                //digitalWrite(CTRL, HIGH);
-                delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
-                currentMode = AUTONOMOUS_MODE;
-                Serial.println("Now in Autonomous Mode");
-                break;
-                */
 
             case AUTONOMOUS_MODE:            
                 // Listen to all communications by the computer.
@@ -783,13 +704,9 @@ uint8_t ModeSet(uint8_t newMode)
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_AUTONOMOUS);
                 // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
-                digitalWrite(cMode_LED, LOW);
-                digitalWrite(AUTO_LED, HIGH);              // Autonomous Mode LED on
-                cMode_LED = AUTO_LED;
-                //digitalWrite(CTRL, HIGH);
+                digitalWrite(PD4, HIGH);              // Autonomous Mode LED on
                 delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
                 currentMode = AUTONOMOUS_MODE;
-                Serial.println("Now in Autonomous Mode");
                 break;
 
             case MANUAL_MODE:
@@ -797,13 +714,9 @@ uint8_t ModeSet(uint8_t newMode)
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_TELEOP);
                 // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
-                digitalWrite(cMode_LED, LOW);
-                digitalWrite(MANUAL_LED, HIGH);    // Manual Mode LED on
-                cMode_LED = MANUAL_LED;
-                //digitalWrite(CTRL, LOW);
+                digitalWrite(PD6, HIGH);    // Manual Mode LED on
                 delay(500);
                 currentMode = MANUAL_MODE;
-                Serial.println("Now in Manual Mode");
                 break;
 
             default:
@@ -814,8 +727,5 @@ uint8_t ModeSet(uint8_t newMode)
         return currentMode; // After setting the mode, this should now be the current mode we return
     }
     else
-    {
-        Serial.println("Not switching");
         return currentMode; // The current mode is not different from the new requested mode
-    }      
 }
