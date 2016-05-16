@@ -474,8 +474,10 @@ void loop(void)
       int tcpSocket = accept(listenSocket, NULL, NULL);
       // Check if a client is connected to a new socket.
       if (tcpSocket > -1) {
-        Serial.print(F("TCP client connected on socket "));
+        Serial.print(F("TCP client connected on socket i"));
         Serial.println(tcpSocket);
+        char* buf = "1";
+        send(tcpSocket, buf, 1, 0);
         // Add the client to the list of connected clients.
         addNewClient(tcpSocket);
       }
