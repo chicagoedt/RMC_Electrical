@@ -9,6 +9,16 @@
 //  Micro controller:       Arduino UNO
 // 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#define ENABLE_DEBUG 1
+
+#if ENABLE_DEBUG
+  #define PRINT(s) Serial.print(s)
+  #define PRINTLN(s) Serial.println(s)
+#else
+  #define PRINT(s)   {}
+  #define PRINTLN(s) {}
+
+#endif
 
 #include <Adafruit_CC3000.h>
 #include <SPI.h>
@@ -25,7 +35,7 @@
 Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ, ADAFRUIT_CC3000_VBAT,
                                          SPI_CLOCK_DIV2); // you can change this clock speed
 
-#define WLAN_SSID       "chicagoedt"           // cannot be longer than 32 characters!
+#define WLAN_SSID       "Team_33"           // cannot be longer than 32 characters!
 #define WLAN_PASS       "notrightnow"
 // Security can be WLAN_SEC_UNSEC, WLAN_SEC_WEP, WLAN_SEC_WPA or WLAN_SEC_WPA2
 #define WLAN_SECURITY   WLAN_SEC_WPA2
@@ -63,7 +73,7 @@ int CANFlag = 0;
 #define LEFT_WHEEL_CONSTANT 100
 #define RIGHT_WHEEL_CONSTANT 100
 #define ACTUATOR_CONSTANT 100
-#define DIG_CONSTANT 500
+#define DIG_CONSTANT 450
 
     // Emergency stop command (!EX) to all motor controllers
     const unsigned char KILL_COMMAND[] = {'@', '0', '1', '!', 'E', 'X',
@@ -120,7 +130,7 @@ void addNewClient(int socket) {
   // so the risk of using up all the memory is low.
   ClientList* client = (ClientList*) malloc(sizeof(ClientList));
   if (client == NULL) {
-    Serial.println(F("Error! Couldn't allocate space to store a new client."));
+      PRINTLN(F("Error! Couldn't allocate space to store a new client."));
     return;
   }
   // Setup the new client as the front of the connected client list.
@@ -165,8 +175,8 @@ void removeClient(struct ClientList* client) {
   // Decrement the count of connected clients.
   clientCount--;
 
-  Serial.print("Client Removed ");
-  Serial.println(clientCount);
+  PRINT("Client Removed ");
+  PRINTLN(clientCount);
 }
 
 // Set up the echo server and start listening for connections.  Should be called once
@@ -184,31 +194,31 @@ void echoSetup() {
   unsigned long aucKeepalive  = 30;
   unsigned long aucInactivity = 0;
   if (netapp_timeout_values(&aucDHCP, &aucARP, &aucKeepalive, &aucInactivity) != 0) {
-    Serial.println(F("Error setting inactivity timeout!"));
+    PRINTLN(F("Error setting inactivity timeout!"));
     while(1);
   }
   // Create a TCP socket
   listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (listenSocket < 0) {
-    Serial.println(F("Couldn't create listening socket!"));
+    PRINTLN(F("Couldn't create listening socket!"));
     while(1);
   }
   
   listenSocketUDP = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (listenSocketUDP < 0) {
-    Serial.println(F("Couldn't create listening socket!"));
+    PRINTLN(F("Couldn't create listening socket!"));
     while(1);
   }
   // Set the socket's accept call as non-blocking.
   // This is required to support multiple clients accessing the server at once.  If the listening
   // port is not set as non-blocking your code can't do anything while it waits for a client to connect.
   if (setsockopt(listenSocket, SOL_SOCKET, SOCKOPT_ACCEPT_NONBLOCK, SOCK_ON, sizeof(SOCK_ON)) < 0) {
-    Serial.println(F("Couldn't set TCP socket as non-blocking!"));
+    PRINTLN(F("Couldn't set TCP socket as non-blocking!"));
     while(1);
   }
 
   if (setsockopt(listenSocketUDP, SOL_SOCKET, SOCKOPT_ACCEPT_NONBLOCK, SOCK_ON, sizeof(SOCK_ON)) < 0) {
-    Serial.println(F("Couldn't set UDP socket as non-blocking!"));
+    PRINTLN(F("Couldn't set UDP socket as non-blocking!"));
     while(1);
   }
   // Bind the socket to a TCP address.
@@ -217,7 +227,7 @@ void echoSetup() {
   address.sin_addr.s_addr = htonl(0);     // Listen on any network interface, equivalent to INADDR_ANY in sockets programming.
   address.sin_port = htons(LISTEN_PORT);  // Listen on the specified port.
   if (bind(listenSocket, (sockaddr*) &address, sizeof(address)) < 0) {
-    Serial.println(F("Error binding TCP listen socket to address!"));
+    PRINTLN(F("Error binding TCP listen socket to address!"));
     while(1);
   }
 
@@ -227,27 +237,27 @@ void echoSetup() {
   addressUDP.sin_addr.s_addr = htonl(0);     // Listen on any network interface, equivalent to INADDR_ANY in sockets programming.
   addressUDP.sin_port = htons(LISTEN_PORT_UDP);  // Listen on the specified port.
   if (bind(listenSocketUDP, (sockaddr*) &addressUDP, sizeof(addressUDP)) < 0) {
-    Serial.println(F("Error binding UDP listen socket to address!"));
+    PRINTLN(F("Error binding UDP listen socket to address!"));
     while(1);
   }
   // Start listening for connectings.
   // The backlog parameter is 0 as it is not supported on TI's CC3000 firmware.
   if (listen(listenSocket, 0) < 0) {
-    Serial.println(F("Error opening TCP socket for listening!"));
+    PRINTLN(F("Error opening TCP socket for listening!"));
     while(1);
   }
   else{
-    Serial.println(F("TCP port is listening"));
+    PRINTLN(F("TCP port is listening"));
   }
 
   if (listen(listenSocketUDP, 0) < 0) {
-    Serial.println(F("Error opening UDP socket for listening!"));
+    PRINTLN(F("Error opening UDP socket for listening!"));
     while(1);
   }
   // Initialize client list as empty.
   clients = NULL;
   clientCount = 0;
-  Serial.println(F("Listening for connections..."));
+  PRINTLN(F("Listening for connections..."));
 }
 
 
@@ -266,19 +276,30 @@ void processBuffer(ClientList* j)
     }   
     
     // for debugging
-    // Serial.print("command bytes: "); 
+    // PRINT("command bytes: "); 
     //OP cc3000.printHexChar(lastCommand, 2);
-    //            Serial.print(lastCommand[0], BIN); Serial.print(lastCommand[1], BIN); Serial.println();
-    //            Serial.print("actuator: "); Serial.println(actuator);
-    //            Serial.print("dig: "); Serial.println(dig);
-    //            Serial.print("mode: "); Serial.println(currentMode);
-    //            Serial.print("left: "); Serial.println(left);
-    //            Serial.print("right: "); Serial.println(right);
+    //            PRINT(lastCommand[0], BIN); PRINT(lastCommand[1], BIN); PRINTLN();
+    //            PRINT("actuator: "); PRINTLN(actuator);
+    //            PRINT("dig: "); PRINTLN(dig);
+    //            PRINT("mode: "); PRINTLN(currentMode);
+    //            PRINT("left: "); PRINTLN(left);
+    //            PRINT("right: "); PRINTLN(right);
     
     String canCommand; // Start string off with "@0" 
     int leftMotorVal = left * LEFT_WHEEL_CONSTANT;
     int rightMotorVal = right * RIGHT_WHEEL_CONSTANT;
-    int actuatorVal = actuator * ACTUATOR_CONSTANT;
+    //int actuatorVal = actuator * ACTUATOR_CONSTANT;
+
+    //new actuator code
+    int actuatorVal = 0;
+    
+    if(actuator == 1)      //digging
+       actuatorVal = 860;
+    else if(actuator == 2) //dumping
+       actuatorVal = -1000;
+    else                   //home
+        actuatorVal = 200;
+        
     int digVal = dig * DIG_CONSTANT;
     
     // append motor value to canCommand if not zero
@@ -291,7 +312,7 @@ void processBuffer(ClientList* j)
              canCommand += "_";
       */
       
-          //Serial.println(i);
+          //PRINTLN(i);
           canCommand += "@01";
           //canCommand += "1";
           canCommand += "!G 1 ";
@@ -309,6 +330,7 @@ void processBuffer(ClientList* j)
     // append actuatorVal to canCommand if last one has changed (no watchdog for actuators)
     if( actuatorVal != lastActuatorVal)
     {
+         PRINTLN(actuatorVal);
          canCommand += "@04!G 1 ";
          canCommand += actuatorVal;
          canCommand += "_@04!G 2 ";
@@ -331,7 +353,7 @@ void processBuffer(ClientList* j)
     if(!ModeSet(currentMode))
     {
       // TODO PRINT OUT ERROR
-      Serial.print("Cannot change mode to "); Serial.println(currentMode);
+      PRINT("Cannot change mode to "); PRINTLN(currentMode);
     }
     */
     
@@ -341,8 +363,8 @@ void processBuffer(ClientList* j)
     {       
       if(CANFlag == 0)
       {
-         Serial.print("Transmitting CAN command from socket ");
-         Serial.println(j->socket);
+         PRINT("Transmitting CAN command from socket ");
+         PRINTLN(j->socket);
         CANFlag++;
       }
       
@@ -353,8 +375,8 @@ void processBuffer(ClientList* j)
       if(canCommand != "")
       {
         //canCommand = "@01!G 1 200\r";
-        Serial.print("CAN: ");
-        Serial.println(canCommand); //Send TX here
+        PRINT("CAN: ");
+        PRINTLN(canCommand); //Send TX here
         Serial1.write(canCommand.c_str());
       }
       
@@ -363,9 +385,9 @@ void processBuffer(ClientList* j)
       /*
       while(Serial1.available() > 0)
       {
-        Serial.println("reading from roboteq");
+        PRINTLN("reading from roboteq");
         char ch1 = Serial1.read();
-        Serial.print(ch1);
+        PRINT(ch1);
       }
       */
       // USART_Transmit(canCommand, canCommand.length());
@@ -373,8 +395,8 @@ void processBuffer(ClientList* j)
     else 
     {
         CANFlag--;
-        //OP Serial.print("Not transmitting CAN command because we are in mode: ");
-        //OP Serial.println(currentMode);
+        //OP PRINT("Not transmitting CAN command because we are in mode: ");
+        //OP PRINTLN(currentMode);
     }
 }
 
@@ -406,9 +428,9 @@ void loop(void)
           
 
             msgCount++;
-            //Serial.print("Msg from socket ");
-            //Serial.print(i->socket);
-            //Serial.println(msgCount);
+            //PRINT("Msg from socket ");
+            //PRINT(i->socket);
+            //PRINTLN(msgCount);
             
             lastCommand[0] = command[0];
             lastCommand[1] = command[1];
@@ -422,8 +444,8 @@ void loop(void)
           //char incomingByte1, incomingByte2;
        
           char oMsg = Serial2.read();
-          //Serial.print("Sent message: ");
-          //Serial.println(oMsg, HEX);
+          //PRINT("Sent message: ");
+          //PRINTLN(oMsg, HEX);
           //incomingByte2 = Serial2.read();
           
           //oMsg[0] = incomingByte1;
@@ -432,20 +454,21 @@ void loop(void)
           
           if(send(i->socket, &oMsg, 1, 0) < 1)
           {
-            Serial.println("Message failed to send on socket");
+            PRINTLN("Message failed to send on socket");
           }
           else
           {
-            Serial.print("Sent message: ");
-            Serial.println(oMsg);
-            //Serial.print(" ");
-            //Serial.println(oMsg[1]);
+            PRINT("Sent message: ");
+            PRINTLN(oMsg);
+            //PRINT(" ");
+            //PRINTLN(oMsg[1]);
           }
           
         }
          i =  i->next;
       
     }
+
 
   
   // Handle new client connections if we aren't at the limit of connected clients.
@@ -459,10 +482,10 @@ void loop(void)
 
     if(udpExists == 0)
     {
-      // Check if a client is connected to a new socket.
+      // Check if a client is connected to a new socket
       if (listenSocketUDP > -1) {
-        Serial.print(F("UDP client connected on socket "));
-        Serial.println(listenSocketUDP);
+        PRINT(F("UDP client connected on socket "));
+        PRINTLN(listenSocketUDP);
         // Add the client to the list of connected clients.
         addNewClient(listenSocketUDP);
         udpExists = 1;
@@ -474,8 +497,8 @@ void loop(void)
       int tcpSocket = accept(listenSocket, NULL, NULL);
       // Check if a client is connected to a new socket.
       if (tcpSocket > -1) {
-        Serial.print(F("TCP client connected on socket i"));
-        Serial.println(tcpSocket);
+        PRINT(F("TCP client connected on socket i"));
+        PRINTLN(tcpSocket);
         char* buf = "1";
         send(tcpSocket, buf, 1, 0);
         // Add the client to the list of connected clients.
@@ -507,16 +530,23 @@ void setup(void)
   Serial.begin(115200);
   Serial1.begin(115200);
   Serial2.begin(115200);
-  
-  Serial.println(F("Hello, CC3000!\n")); 
 
-  Serial.print("Free RAM: "); Serial.println(getFreeRam(), DEC);
+  /*
+  while(!testSerial())
+  {
+    //PRINTLN("Trying to read from serial"); 
+  }
+  */
+  
+  PRINTLN(F("Hello, CC3000!\n")); 
+
+  PRINT("Free RAM: "); PRINTLN(getFreeRam());
   
   /* Initialise the module */
-  Serial.println(F("\nInitializing..."));
+  PRINTLN(F("\nInitializing..."));
   while (!cc3000.begin())
   {
-    Serial.println(F("Couldn't begin()! Check your wiring?"));
+    PRINTLN(F("Couldn't begin()! Check your wiring?"));
     delay(500);
   }
 
@@ -525,7 +555,7 @@ void setup(void)
   uint16_t firmware = checkFirmwareVersion();
   if (firmware < 0x113)
   {
-    Serial.println(F("Wrong firmware version!"));
+    PRINTLN(F("Wrong firmware version!"));
     while(1);
   }
   */
@@ -534,14 +564,14 @@ void setup(void)
   //displayDriverMode();
   //displayMACAddress();
 
-  Serial.print("Connecting to AP - ");
+  PRINT("Connecting to AP - ");
   
   if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY)) {
-    Serial.println("Failed!");
+    PRINTLN("Failed!");
     while(1);
   }
    
-  Serial.println("Connected!");
+  PRINTLN("Connected!");
   
   // Check for DHCP and timeout after 20 seconds
   unsigned long dhcpTimeout = 20000;  // Try for 20 sec
@@ -549,16 +579,16 @@ void setup(void)
    
   for(unsigned long t = millis(); ((millis() - t) <= dhcpTimeout);)
   {
-    Serial.print("Querying DHCP - ");
+    PRINT("Querying DHCP - ");
     
     if(cc3000.checkDHCP())
     {
-      Serial.println(F("OK"));
+      PRINTLN(F("OK"));
       digitalWrite(WIFI_LED, HIGH);
       break;
     }
     else
-      Serial.println(retry+1);
+      PRINTLN(retry+1);
     
     ++retry;
     delay(1000);
@@ -583,17 +613,17 @@ bool displayConnectionDetails(void)
   
   if(!cc3000.getIPAddress(&ipAddress, &netmask, &gateway, &dhcpserv, &dnsserv))
   {
-    Serial.println(F("Unable to retrieve the IP Address!\r\n"));
+    PRINTLN(F("Unable to retrieve the IP Address!\r\n"));
     return false;
   }
   else
   {
-    Serial.print(F("\nIP Addr: ")); cc3000.printIPdotsRev(ipAddress);
-    Serial.print(F("\nNetmask: ")); cc3000.printIPdotsRev(netmask);
-    Serial.print(F("\nGateway: ")); cc3000.printIPdotsRev(gateway);
-    Serial.print(F("\nDHCPsrv: ")); cc3000.printIPdotsRev(dhcpserv);
-    Serial.print(F("\nDNSserv: ")); cc3000.printIPdotsRev(dnsserv);
-    Serial.println();
+    PRINT(F("\nIP Addr: ")); cc3000.printIPdotsRev(ipAddress);
+    PRINT(F("\nNetmask: ")); cc3000.printIPdotsRev(netmask);
+    PRINT(F("\nGateway: ")); cc3000.printIPdotsRev(gateway);
+    PRINT(F("\nDHCPsrv: ")); cc3000.printIPdotsRev(dhcpserv);
+    PRINT(F("\nDNSserv: ")); cc3000.printIPdotsRev(dnsserv);
+    PRINTLN();
     return true;
   }
 }
@@ -601,8 +631,8 @@ bool displayConnectionDetails(void)
 
 void Reboot(const char* errMsg, uint32_t errCode)
 {
-  Serial.println(errMsg);
-  Serial.println(F("--REBOOTING--"));
+  PRINTLN(errMsg);
+  PRINTLN(F("--REBOOTING--"));
   //while(true);
   //cc3000.reboot();
         for(uint32_t x = 0; x < errCode; x++);
@@ -617,14 +647,14 @@ void Reboot(const char* errMsg, uint32_t errCode)
 void displayDriverMode(void)
 {
 #ifdef CC3000_TINY_DRIVER
-  Serial.println(F("CC3000 is configured in 'Tiny' mode"));
+  PRINTLN(F("CC3000 is configured in 'Tiny' mode"));
 #else
-  Serial.print(F("RX Buffer : "));
-  Serial.print(CC3000_RX_BUFFER_SIZE);
-  Serial.println(F(" bytes"));
-  Serial.print(F("TX Buffer : "));
-  Serial.print(CC3000_TX_BUFFER_SIZE);
-  Serial.println(F(" bytes"));
+  PRINT(F("RX Buffer : "));
+  PRINT(CC3000_RX_BUFFER_SIZE);
+  PRINTLN(F(" bytes"));
+  PRINT(F("TX Buffer : "));
+  PRINT(CC3000_TX_BUFFER_SIZE);
+  PRINTLN(F(" bytes"));
 #endif
 }
 
@@ -634,11 +664,11 @@ void displayMACAddress(void)
   
   if(!cc3000.getMacAddress(macAddress))
   {
-    Serial.println(F("Unable to retrieve MAC Address!"));
+    PRINTLN(F("Unable to retrieve MAC Address!"));
   }
   else
   {
-    Serial.print(F("MAC Address : "));
+    PRINT(F("MAC Address : "));
     cc3000.printHex((byte*)&macAddress, 6);
   }
 }
@@ -652,22 +682,23 @@ void disableIdleTimout() {
     unsigned long aucKeepalive  = 30;
     unsigned long aucInactivity = 0;
     
-    if(aucInactivity == 0)
-        Serial.println(F("Setting netapp to not timeout"));
+    if(aucInactivity == 0){
+        PRINTLN(F("Setting netapp to not timeout"));
+    }
     else
     {
-        Serial.print(F("Setting netapp to timeout in "));
-        Serial.print(aucInactivity);
-        Serial.println(F(" Seconds"));
+        PRINT(F("Setting netapp to timeout in "));
+        PRINT(aucInactivity);
+        PRINTLN(F(" Seconds"));
     }
     
     long iRet = netapp_timeout_values(&aucDHCP, &aucARP, &aucKeepalive, &aucInactivity);
     
     if (iRet != 0)
     {
-        Serial.print(F("Could not set netapp option, iRet = "));
-        Serial.println(iRet);
-        Serial.println(F(", aborting..."));
+        PRINT(F("Could not set netapp option, iRet = "));
+        PRINTLN(iRet);
+        PRINTLN(F(", aborting..."));
         while(1);
     }
 }
@@ -727,11 +758,11 @@ void MuxSelect(uint8_t selection)
   {
     case MUX_TELEOP:
         digitalWrite(CTRL, LOW);     //Set MUX Select low to allow Atmega TX line to go through MUX
-        Serial.println("Mux set to low");
+        PRINTLN("Mux set to low");
         break;
     case MUX_AUTONOMOUS:
         digitalWrite(CTRL, HIGH);    // Set MUX Select high to allow FTDI to go through MUX
-        Serial.println("Mux set to high");
+        PRINTLN("Mux set to high");
         break;
   }
 }
@@ -739,8 +770,8 @@ void MuxSelect(uint8_t selection)
 uint8_t ModeSet(uint8_t newMode)
 {
 
-    Serial.print("Mode change request is: "); Serial.println(newMode);
-    Serial.print("Current mode is: "); Serial.println(currentMode);
+    PRINT("Mode change request is: "); PRINTLN(newMode);
+    PRINT("Current mode is: "); PRINTLN(currentMode);
     // don't do anything if we're in same mode
     if (newMode != currentMode)
     {
@@ -758,7 +789,7 @@ uint8_t ModeSet(uint8_t newMode)
                 cMode_LED = SAFE_LED;
                 //digitalWrite(CTRL, LOW);
                 delay(500);
-                Serial.println("Now in Safe Mode");
+                PRINTLN("Now in Safe Mode");
                 break;
                 
                 /*
@@ -774,7 +805,7 @@ uint8_t ModeSet(uint8_t newMode)
                 //digitalWrite(CTRL, HIGH);
                 delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
                 currentMode = AUTONOMOUS_MODE;
-                Serial.println("Now in Autonomous Mode");
+                PRINTLN("Now in Autonomous Mode");
                 break;
                 */
 
@@ -791,7 +822,7 @@ uint8_t ModeSet(uint8_t newMode)
                 //digitalWrite(CTRL, HIGH);
                 delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
                 currentMode = AUTONOMOUS_MODE;
-                Serial.println("Now in Autonomous Mode");
+                PRINTLN("Now in Autonomous Mode");
                 break;
 
             case MANUAL_MODE:
@@ -805,7 +836,7 @@ uint8_t ModeSet(uint8_t newMode)
                 //digitalWrite(CTRL, LOW);
                 delay(500);
                 currentMode = MANUAL_MODE;
-                Serial.println("Now in Manual Mode");
+                PRINTLN("Now in Manual Mode");
                 break;
 
             default:
@@ -817,7 +848,23 @@ uint8_t ModeSet(uint8_t newMode)
     }
     else
     {
-        Serial.println("Not switching");
+        PRINTLN("Not switching");
         return currentMode; // The current mode is not different from the new requested mode
     }      
 }
+
+int testSerial()
+{
+  if(Serial.available() > 0)
+  {
+    char tst = Serial.read();
+    PRINTLN(tst);
+    return 1;
+  }
+  else
+  {
+    //PRINTLN("No serial found");
+    return 0;
+  }
+}
+
