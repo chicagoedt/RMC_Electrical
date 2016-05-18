@@ -14,6 +14,7 @@
 #if ENABLE_DEBUG
   #define PRINT(s) Serial.print(s)
   #define PRINTLN(s) Serial.println(s)
+  #define PRINTLNBIN(s, b) Serial.println(s, b)
 #else
   #define PRINT(s)   {}
   #define PRINTLN(s) {}
@@ -142,41 +143,26 @@ void addNewClient(int socket) {
   clientCount++;
 }
 
-// Remove a client from the connected client list.
-void removeClient(struct ClientList* client) {
-  if (client == NULL) {
-    // Handle null client to delete.  This should never happen
-    // but is good practice as a precaution.
+void removeClient() 
+{
+  ClientList* head = clients;
+  if(head == NULL)
     return;
-  }
-  if (clients == client) {
-    // Handle the client to delete being at the front of the list.
-    clients = client->next;
-  }
-  else {
-    // Handle the client to delete being somewhere inside the list.
-    // Iterate through the list until we find the entry before the
-    // client to delete.
-    ClientList* i = clients;
-    while (i != NULL && i->next != client) {
-      i = i->next;
+  if(head->next != NULL)
+  {
+    while(head->next != NULL)
+    {
+      ClientList* temp = head->next;
+      closesocket(temp->socket);
+      head->next = head->next->next;
+      free(temp);
+      clientCount--;
     }
-    if (i == NULL) {
-      // Couldn't find the client to delete, do nothing.
-      return;
-    }
-    // Remove the client from the list.
-    i->next = client->next;
   }
-  // Free the memory associated with the client and set the
-  // pointer to null as a precaution against dangling references.
-  free(client);
-  client = NULL;
-  // Decrement the count of connected clients.
+  closesocket(clients->socket);
+  free(clients);
+  clients = NULL;
   clientCount--;
-
-  PRINT("Client Removed ");
-  PRINTLN(clientCount);
 }
 
 // Set up the echo server and start listening for connections.  Should be called once
@@ -197,15 +183,39 @@ void echoSetup() {
     PRINTLN(F("Error setting inactivity timeout!"));
     while(1);
   }
+
+  if(udpExists == 0)
+  {
+    listenSocketUDP = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (listenSocketUDP < 0) {
+      PRINTLN(F("Couldn't create listening socket!"));
+      while(1);
+    }
+
+    // Bind the socket to a UDP address.
+    sockaddr_in addressUDP;
+    addressUDP.sin_family = AF_INET;
+    addressUDP.sin_addr.s_addr = htonl(0);     // Listen on any network interface, equivalent to INADDR_ANY in sockets programming.
+    addressUDP.sin_port = htons(LISTEN_PORT_UDP);  // Listen on the specified port.
+    if (bind(listenSocketUDP, (sockaddr*) &addressUDP, sizeof(addressUDP)) < 0) {
+      PRINTLN(F("Error binding UDP listen socket to address!"));
+      while(1);
+    }
+  
+    if (setsockopt(listenSocketUDP, SOL_SOCKET, SOCKOPT_ACCEPT_NONBLOCK, SOCK_ON, sizeof(SOCK_ON)) < 0) {
+      PRINTLN(F("Couldn't set UDP socket as non-blocking!"));
+      while(1);
+    }
+  
+    if (listen(listenSocketUDP, 0) < 0) {
+      PRINTLN(F("Error opening UDP socket for listening!"));
+      while(1);
+    }
+  }
+
   // Create a TCP socket
   listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (listenSocket < 0) {
-    PRINTLN(F("Couldn't create listening socket!"));
-    while(1);
-  }
-  
-  listenSocketUDP = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (listenSocketUDP < 0) {
     PRINTLN(F("Couldn't create listening socket!"));
     while(1);
   }
@@ -217,10 +227,6 @@ void echoSetup() {
     while(1);
   }
 
-  if (setsockopt(listenSocketUDP, SOL_SOCKET, SOCKOPT_ACCEPT_NONBLOCK, SOCK_ON, sizeof(SOCK_ON)) < 0) {
-    PRINTLN(F("Couldn't set UDP socket as non-blocking!"));
-    while(1);
-  }
   // Bind the socket to a TCP address.
   sockaddr_in address;
   address.sin_family = AF_INET;
@@ -228,16 +234,6 @@ void echoSetup() {
   address.sin_port = htons(LISTEN_PORT);  // Listen on the specified port.
   if (bind(listenSocket, (sockaddr*) &address, sizeof(address)) < 0) {
     PRINTLN(F("Error binding TCP listen socket to address!"));
-    while(1);
-  }
-
-  // Bind the socket to a UDP address.
-  sockaddr_in addressUDP;
-  addressUDP.sin_family = AF_INET;
-  addressUDP.sin_addr.s_addr = htonl(0);     // Listen on any network interface, equivalent to INADDR_ANY in sockets programming.
-  addressUDP.sin_port = htons(LISTEN_PORT_UDP);  // Listen on the specified port.
-  if (bind(listenSocketUDP, (sockaddr*) &addressUDP, sizeof(addressUDP)) < 0) {
-    PRINTLN(F("Error binding UDP listen socket to address!"));
     while(1);
   }
   // Start listening for connectings.
@@ -250,10 +246,6 @@ void echoSetup() {
     PRINTLN(F("TCP port is listening"));
   }
 
-  if (listen(listenSocketUDP, 0) < 0) {
-    PRINTLN(F("Error opening UDP socket for listening!"));
-    while(1);
-  }
   // Initialize client list as empty.
   clients = NULL;
   clientCount = 0;
@@ -286,8 +278,8 @@ void processBuffer(ClientList* j)
     //            PRINT("right: "); PRINTLN(right);
     
     String canCommand; // Start string off with "@0" 
-    int leftMotorVal = left * LEFT_WHEEL_CONSTANT;
-    int rightMotorVal = right * RIGHT_WHEEL_CONSTANT;
+    int leftMotorVal = -(left * LEFT_WHEEL_CONSTANT);
+    int rightMotorVal = -(right * RIGHT_WHEEL_CONSTANT);
     //int actuatorVal = actuator * ACTUATOR_CONSTANT;
 
     //new actuator code
@@ -418,12 +410,14 @@ void loop(void)
         if (i->client.available() > 0) 
         {
             byte command[2];
-            
+
+            /*
             if( i->client.read(&command, 2) <= 0)
             {
               removeClient(i);
               return;
             }
+            */
 
           
 
@@ -437,13 +431,16 @@ void loop(void)
         
         }
         processBuffer(i);
-       if(Serial2.available() > 0)
+        nucToMC(i);
+
+       /*
+       if(Serial.available() > 0)
        {
 
-          //char oMsg[2];
+          //char oMsg[4];
           //char incomingByte1, incomingByte2;
        
-          char oMsg = Serial2.read();
+          char oMsg = Serial.read();
           //PRINT("Sent message: ");
           //PRINTLN(oMsg, HEX);
           //incomingByte2 = Serial2.read();
@@ -465,6 +462,7 @@ void loop(void)
           }
           
         }
+        */
          i =  i->next;
       
     }
@@ -496,18 +494,70 @@ void loop(void)
       // Check if a client is connected to a new socket.
       int tcpSocket = accept(listenSocket, NULL, NULL);
       // Check if a client is connected to a new socket.
+      /*
+      if(tcpSocket > 0)
+      {
+        PRINTLN("Removing clients");
+        //PRINTLN(tcpSocket-1);
+        removeClient(tcpSocket);
+      }
+      */
       if (tcpSocket > -1) {
-        PRINT(F("TCP client connected on socket i"));
+        PRINT(F("TCP client connected on socket "));
         PRINTLN(tcpSocket);
-        char* buf = "1";
-        send(tcpSocket, buf, 1, 0);
+        //char* buf = "1";
+        //send(tcpSocket, buf, 1, 0);
         // Add the client to the list of connected clients.
+        removeClient();
         addNewClient(tcpSocket);
       }
     }
   }
 
   delay(100);  // 1000 / UI UPS
+}
+
+void nucToMC(ClientList* i)
+{
+  if(Serial.available() > 0)
+       {
+
+          char oMsg[4];
+          oMsg[0] = Serial.read();
+          oMsg[1] = Serial.read();
+          oMsg[2] = Serial.read();
+          oMsg[3] = Serial.read();
+          
+          //char oMsg = Serial.read();
+          //PRINT("Sent message: ");
+          PRINTLNBIN(oMsg[0], BIN);
+          PRINTLNBIN(oMsg[1], BIN);
+          PRINTLNBIN(oMsg[2], BIN);
+          PRINTLNBIN(oMsg[3], BIN);
+          //incomingByte2 = Serial2.read();
+          
+          //oMsg[0] = incomingByte1;
+          //oMsg[1] = incomingByte2;
+
+          char* buf = oMsg;
+          
+          if(send(i->socket, buf, 1, 0) < 1)
+          {
+            PRINTLN("Message failed to send on socket");
+          }
+          else
+          {
+            PRINT("Sent message: ");
+            PRINTLN(buf[0]);
+            PRINTLN(buf[1]);
+            PRINTLN(buf[2]);
+            PRINTLN(buf[3]);
+            //PRINT(" ");
+            //PRINTLN(oMsg[1]);
+          }
+          
+          
+        } 
 }
 
 void setup(void)
