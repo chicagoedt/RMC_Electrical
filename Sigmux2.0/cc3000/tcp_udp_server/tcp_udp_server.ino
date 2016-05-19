@@ -18,6 +18,7 @@
 #else
   #define PRINT(s)   {}
   #define PRINTLN(s) {}
+  #define PRINTLNBIN(s, b) {}
 
 #endif
 
@@ -62,11 +63,21 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ
 #define AUTONOMOUS_MODE    1
 #define MANUAL_MODE        2
 
+#define ENCODER_PIN        14
+
 #define SAFE_DELAY 1000      // delay in ms every time we switch to/from SAFE_MODE
+
+#define DIG_DELTA_THETA     (2*PI)/5  // 5 magnets on the encoder, 360/5 is the change in theta
 
 byte lastCommand[2];
 
 static volatile uint8_t currentMode;
+
+bool encoderFlag = false;
+
+unsigned long newtime = 0;
+unsigned long oldtime = 0;
+long vel = 0;
 
 int lastActuatorVal = 0;
 int CANFlag = 0;
@@ -259,9 +270,11 @@ void processBuffer(ClientList* j)
     uint8_t dig         = 0;
     int8_t left        =  0;
     int8_t right       =  0;
+    int8_t kill        =  0;
+    int8_t dock        =  0;
     
     uint8_t mode = currentMode;
-    parseCommand(lastCommand, &actuator, &dig, &mode, &left, &right);
+    parseCommand(lastCommand, &actuator, &dig, &mode, &left, &right, &kill, &dock);
     if(mode != currentMode)
     {
       ModeSet(mode);
@@ -303,6 +316,30 @@ void processBuffer(ClientList* j)
           if ( i != 1)
              canCommand += "_";
       */
+
+          if(dig == 1)
+          {
+            if(leftMotorVal < 0)
+               leftMotorVal = -300;
+            if(leftMotorVal > 0)
+               leftMotorVal = 300;
+            if(rightMotorVal < 0)
+               rightMotorVal = -300;
+            if(rightMotorVal > 0)
+               rightMotorVal = 300;  
+          }
+
+          if(dock == 1)
+          {
+            if(leftMotorVal < 0)
+               leftMotorVal = -300;
+            if(leftMotorVal > 0)
+               leftMotorVal = 300;
+            if(rightMotorVal < 0)
+               rightMotorVal = -300;
+            if(rightMotorVal > 0)
+               rightMotorVal = 300;  
+          }
       
           //PRINTLN(i);
           canCommand += "@01";
@@ -392,6 +429,17 @@ void processBuffer(ClientList* j)
     }
 }
 
+void checkEncoder()
+{
+
+    newtime = millis();
+    Serial.print("newtime is: "); Serial.print(newtime);
+    vel = DIG_DELTA_THETA * 1000 / (newtime - oldtime);
+    PRINT("Vel is "); PRINTLN(vel);
+    Serial.write(vel);
+    oldtime = newtime;
+    encoderFlag = false;
+}
 int  msgCount = 0;
 // Update the state of clients, and accept new client connections.  Should be called
 // by the Arduino sketch's loop function.
@@ -399,8 +447,15 @@ void loop(void)
 {  
     // Iterate through all the connected clients.
     ClientList* i = clients;
-    
-    while (i != NULL) 
+
+    /*
+    if(encoderFlag)
+    {
+      checkEncoder();
+    }
+    */
+        
+    if (i != NULL) 
     {
         // Save the next client so the current one can be removed when it disconnects
         // without breaking iteration through the clients.
@@ -411,15 +466,14 @@ void loop(void)
         {
             byte command[2];
 
-            /*
+            
             if( i->client.read(&command, 2) <= 0)
             {
-              removeClient(i);
+              //removeClient(i);
               return;
             }
-            */
+            
 
-          
 
             msgCount++;
             //PRINT("Msg from socket ");
@@ -432,39 +486,7 @@ void loop(void)
         }
         processBuffer(i);
         nucToMC(i);
-
-       /*
-       if(Serial.available() > 0)
-       {
-
-          //char oMsg[4];
-          //char incomingByte1, incomingByte2;
-       
-          char oMsg = Serial.read();
-          //PRINT("Sent message: ");
-          //PRINTLN(oMsg, HEX);
-          //incomingByte2 = Serial2.read();
-          
-          //oMsg[0] = incomingByte1;
-          //oMsg[1] = incomingByte2;
-
-          
-          if(send(i->socket, &oMsg, 1, 0) < 1)
-          {
-            PRINTLN("Message failed to send on socket");
-          }
-          else
-          {
-            PRINT("Sent message: ");
-            PRINTLN(oMsg);
-            //PRINT(" ");
-            //PRINTLN(oMsg[1]);
-          }
-          
-        }
-        */
-         i =  i->next;
-      
+  
     }
 
 
@@ -560,8 +582,20 @@ void nucToMC(ClientList* i)
         } 
 }
 
+void handleEncoder()
+{
+  if(!encoderFlag)
+  {
+    Serial.println("Handling Encoder");
+    encoderFlag = true;
+  }
+}
+
 void setup(void)
 {
+  pinMode(ENCODER_PIN, INPUT);
+  //digitalWrite(ENCODER_PIN, LOW);
+  attachInterrupt(ENCODER_PIN, handleEncoder, RISING);
   pinMode(SAFE_LED, OUTPUT);
   pinMode(AUTO_LED, OUTPUT);
   pinMode(MANUAL_LED, OUTPUT);
@@ -766,7 +800,7 @@ motors
  * We have to convert them to little-endian. Note that left and right values are signed (2's complement).
  *
  */
-void parseCommand(byte* comm, uint8_t* actuator, uint8_t* dig, uint8_t* mode, int8_t* left, int8_t* right)
+void parseCommand(byte* comm, uint8_t* actuator, uint8_t* dig, uint8_t* mode, int8_t* left, int8_t* right, int8_t* kill, int8_t* dock)
 {
     // convert command bytes to little-endian
     uint16_t command = (uint16_t)( (comm[0] << 8) | (comm[1]) );
@@ -800,6 +834,15 @@ void parseCommand(byte* comm, uint8_t* actuator, uint8_t* dig, uint8_t* mode, in
     uint16_t RIGHT_MASK = 0x000F ; // 0b 00000000 00001111
     *right = ((int8_t)((command & RIGHT_MASK) << 4) ) / 16;
 
+    //KILL COMMAND -- NEEDS TESTING
+    //0b 10000000 00000000
+    uint16_t KILL_MASK = 0x8000 ;
+    uint8_t KILL_OFFSET = 15;
+    *kill = (command & KILL_MASK) >> KILL_OFFSET;
+
+    uint16_t DOCK_MASK = 0x4000 ;
+    uint8_t DOCK_OFFSET = 14;
+    *dock = (command & DOCK_MASK) >> DOCK_OFFSET;
 }
 
 void MuxSelect(uint8_t selection)
