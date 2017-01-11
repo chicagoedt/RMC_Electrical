@@ -7,6 +7,7 @@
 // 
 //  Project Title:          cc3000.ino
 //  Micro controller:       Arduino UNO
+
 // 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define ENABLE_DEBUG 1
@@ -37,7 +38,7 @@
 Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ, ADAFRUIT_CC3000_VBAT,
                                          SPI_CLOCK_DIV2); // you can change this clock speed
 
-#define WLAN_SSID       "Team_33"           // cannot be longer than 32 characters!
+#define WLAN_SSID       "chicagoedt"           // cannot be longer than 32 characters!
 #define WLAN_PASS       "notrightnow"
 // Security can be WLAN_SEC_UNSEC, WLAN_SEC_WEP, WLAN_SEC_WPA or WLAN_SEC_WPA2
 #define WLAN_SECURITY   WLAN_SEC_WPA2
@@ -209,7 +210,7 @@ void echoSetup() {
     addressUDP.sin_addr.s_addr = htonl(0);     // Listen on any network interface, equivalent to INADDR_ANY in sockets programming.
     addressUDP.sin_port = htons(LISTEN_PORT_UDP);  // Listen on the specified port.
     if (bind(listenSocketUDP, (sockaddr*) &addressUDP, sizeof(addressUDP)) < 0) {
-      PRINTLN(F("Error binding UDP listen socket to address!"));
+      PRINTLN(F("Error binding UDP l.isten socket to address!"));
       while(1);
     }
   
@@ -625,6 +626,8 @@ void setup(void)
   PRINTLN(F("Hello, CC3000!\n")); 
 
   PRINT("Free RAM: "); PRINTLN(getFreeRam());
+
+  PRINT("TEST \r\n");
   
   /* Initialise the module */
   PRINTLN(F("\nInitializing..."));
@@ -633,6 +636,13 @@ void setup(void)
     PRINTLN(F("Couldn't begin()! Check your wiring?"));
     delay(500);
   }
+
+/*
+  while(1)
+  {
+    
+  }
+*/
 
 /*
   // Check Firmware version
