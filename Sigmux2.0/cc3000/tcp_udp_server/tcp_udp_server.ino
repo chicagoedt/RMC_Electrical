@@ -59,10 +59,14 @@ Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ
 #define SAFE_LED           2     // Safe mode LED
 #define WIFI_LED           18    // Wifi LED
 #define DATA_LED           19    // Data LED
-#define CTRL               15    // MUX Select Pin
+#define ENC                15
+
+#define CTRL               9    // MUX Select Pin
 #define SAFE_MODE          0
 #define AUTONOMOUS_MODE    1
 #define MANUAL_MODE        2
+#define ACT_UP_PIN     23
+#define ACT_DOWN_PIN   21
 
 #define ENCODER_PIN        14
 
@@ -80,6 +84,7 @@ unsigned long newtime = 0;
 unsigned long oldtime = 0;
 long vel = 0;
 
+int actuatorVal = 200;
 int lastActuatorVal = 0;
 int CANFlag = 0;
 // constants multiplied by value from panel udp socket
@@ -297,7 +302,7 @@ void processBuffer(ClientList* j)
     //int actuatorVal = actuator * ACTUATOR_CONSTANT;
 
     //new actuator code
-    int actuatorVal = 0;
+    actuatorVal = 0;
     
     if(actuator == 1)      //digging
        actuatorVal = 860;
@@ -448,13 +453,6 @@ void loop(void)
 {  
     // Iterate through all the connected clients.
     ClientList* i = clients;
-
-    /*
-    if(encoderFlag)
-    {
-      checkEncoder();
-    }
-    */
         
     if (i != NULL) 
     {
@@ -474,12 +472,7 @@ void loop(void)
               return;
             }
             
-
-
             msgCount++;
-            //PRINT("Msg from socket ");
-            //PRINT(i->socket);
-            //PRINTLN(msgCount);
             
             lastCommand[0] = command[0];
             lastCommand[1] = command[1];
@@ -604,6 +597,17 @@ void setup(void)
   digitalWrite(WIFI_LED, LOW);
   pinMode(DATA_LED, OUTPUT);
   pinMode(CTRL, OUTPUT);
+  pinMode(ENC, INPUT);
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////////Hemant additions:
+  pinMode(ACT_UP_PIN, INPUT_PULLUP);     //initalize the internal pullup
+  digitalWrite(ACT_UP_PIN,LOW);         //set up the pull up
+  pinMode(ACT_DOWN_PIN,INPUT_PULLUP);
+  digitalWrite(ACT_DOWN_PIN,LOW);
+  attachInterrupt(ACT_UP_PIN, actUP, RISING);   //actuatorup code
+  attachInterrupt(ACT_DOWN_PIN, actDOWN, RISING);  //actuator down code
+  sei();
+  ///////////////////////////////////////////////////////////////////////////////////////////////////HEMANT ADDITIONS:
 
   lastCommand[0] = lastCommand[0] | 0x01;
 
@@ -612,7 +616,7 @@ void setup(void)
   //digitalWrite(CTRL, HIGH);
   udpExists = 1;
   
-  Serial.begin(115200);
+  Serial.begin(230400);
   Serial1.begin(115200);
   Serial2.begin(115200);
 
@@ -767,6 +771,66 @@ void displayMACAddress(void)
   }
 }
 
+
+//////////////////////////////////////////////////////////////HEMANT
+void actUP(){
+   Serial.println("In actUp");
+   if(actuatorVal == 200)
+   {
+     String canCommand = "";
+     actuatorVal = -1000;
+     canCommand += "@04!G 1 ";
+     canCommand += actuatorVal;
+     canCommand += "_@04!G 2 ";
+     canCommand += actuatorVal;
+     canCommand += "\r";
+     if(currentMode != MANUAL_MODE)
+     {
+       uint8_t lastMode = currentMode;
+       ModeSet(MANUAL_MODE);
+       Serial.println("Sending can command: " + canCommand);
+       Serial1.write(canCommand.c_str());
+       ModeSet(lastMode);
+     }
+     else
+     {
+       Serial.println("Sending can command: " + canCommand);
+       Serial1.write(canCommand.c_str());
+     }
+
+   }
+}
+
+void actDOWN(){
+   Serial.println("In actDown");
+   
+   if(actuatorVal == -1000)
+   {
+     String canCommand = "";
+     actuatorVal = 200;
+     canCommand += "@04!G 1 ";
+     canCommand += actuatorVal;
+     canCommand += "_@04!G 2 ";
+     canCommand += actuatorVal;
+     canCommand += "\r";
+     if(currentMode != MANUAL_MODE)
+     {
+       uint8_t lastMode = currentMode;
+       ModeSet(MANUAL_MODE);
+       Serial.println("Sending can command: " + canCommand);
+       Serial1.write(canCommand.c_str());
+       ModeSet(lastMode);
+     }
+     else
+     {
+       Serial.println("Sending can command: " + canCommand);
+       Serial1.write(canCommand.c_str());
+     }
+   }
+  
+}
+////////////////////////////////////////////////////////////HEMANT
+
 void disableIdleTimout() {
     // Per http://e2e.ti.com/support/low_power_rf/f/851/t/292664.aspx
     // aucInactivity needs to be set to 0 (never timeout) or the socket will close after
@@ -916,11 +980,13 @@ uint8_t ModeSet(uint8_t newMode)
                 // Listen to all communications by the computer.
                 // Do not forward any CC3000 motor controller commands.
                 // USART_Transmit (KILL_COMMAND, 35);
+                attachInterrupt(ENC, EncChange, CHANGE);
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_AUTONOMOUS);
                 // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
                 digitalWrite(cMode_LED, LOW);
                 digitalWrite(AUTO_LED, HIGH);              // Autonomous Mode LED on
+                //attachInterrupt(ENC, EncDown, FALLING);
                 cMode_LED = AUTO_LED;
                 //digitalWrite(CTRL, HIGH);
                 delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
@@ -930,6 +996,7 @@ uint8_t ModeSet(uint8_t newMode)
 
             case MANUAL_MODE:
                 // USART_Transmit (KILL_COMMAND, 35);
+                detachInterrupt(ENC);
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_TELEOP);
                 // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
@@ -955,6 +1022,17 @@ uint8_t ModeSet(uint8_t newMode)
         return currentMode; // The current mode is not different from the new requested mode
     }      
 }
+
+void EncChange()
+{
+   Serial.flush();
+   int val = digitalRead(ENC);
+   String valS = String(val);
+   //Serial.print("The value is ");
+   //Serial.println(val);
+   Serial.print(valS.c_str());
+}
+
 
 int testSerial()
 {

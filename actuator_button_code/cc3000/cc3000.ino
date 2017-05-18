@@ -68,6 +68,7 @@ Adafruit_CC3000_Client udpClient;
 #define PD6            3     // Manual mode LED
 #define PD4            4     // Autonomous mode LED
 #define PC6            5     // WLAN LED
+#define ENC            15
 
 #define SAFE_MODE       0
 #define AUTONOMOUS_MODE       1
@@ -119,6 +120,7 @@ void setup()
 {
         pinMode(3, OUTPUT);
         pinMode(4, OUTPUT);
+        pinMode(ENC, INPUT);
         
         //memset(&socketAddr, 0, sizeof(sockaddr_in));
       
@@ -171,8 +173,8 @@ void setup()
          
       	Serial.println(F("OK"));
         
-          // Check for DHCP and timeout after 20 seconds
-          unsigned long dhcpTimeout = 20000;	// Try for 20 sec
+        // Check for DHCP and timeout after 20 seconds
+        unsigned long dhcpTimeout = 20000;	// Try for 20 sec
       	unsigned long retry       = 0;
          
       	for(unsigned long t = millis(); ((millis() - t) <= dhcpTimeout);)
@@ -317,18 +319,19 @@ void loop()
                 // TODO PRINT OUT ERROR
                 Serial.print("Cannot change mode to "); Serial.println(currentMode);
             }
-
-            
-            Serial.print("CAN command is: ");
-            Serial.println(canCommand); //Send TX here
             
             // TODO if manual mode,
             // construct RoboteQ commands and transmit over USART
             if(currentMode == MANUAL_MODE)
             {
+                Serial.print("CAN command is: ");
+                Serial.println(canCommand); //Send TX here
+                
                 Serial.println("Transmitting CAN command...");
                 // USART_Transmit(canCommand, canCommand.length());
-            } else {
+            }
+            else {
+                
                 Serial.print("Not transmitting CAN command because we are in mode: ");
                 Serial.println(currentMode);
             }
@@ -537,6 +540,8 @@ uint8_t ModeSet(uint8_t newMode)
                 // USART_Transmit (KILL_COMMAND, 35);
                 delay(SAFE_DELAY);
                 MuxSelect(MUX_AUTONOMOUS);
+                attachInterrupt(ENC, EncUp, RISING);
+                attachInterrupt(ENC, EncUp, FALLING);
                 // USART_Transmit (RESUME_COMMAND, 35);  // re-activate motor controllers
                 digitalWrite(PD4, HIGH);    	        // Autonomous Mode LED on
                 delay(500);  // TODO why do we need this delay? we don't want this to let the udp buffer fill up?
@@ -580,6 +585,16 @@ void actDOWN(){
   canCommand += "@05!G 1 ";
   canCommand += digvalcopy;
   canCommand += "\r";
+  
+}
+
+void EncUp()
+{
+  
+}
+
+void EncDown()
+{
   
 }
 ////////////////////////////////////////////////////////////HEMANT
